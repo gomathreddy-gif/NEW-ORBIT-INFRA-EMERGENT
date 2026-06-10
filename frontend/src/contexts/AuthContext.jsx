@@ -8,6 +8,9 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Only verify session on admin routes to avoid 401 noise on public pages
+    const onAdmin = typeof window !== "undefined" && window.location.pathname.startsWith("/admin");
+    if (!onAdmin) { setLoading(false); return; }
     (async () => {
       try {
         const { data } = await api.get("/auth/me");
