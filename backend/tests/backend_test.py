@@ -245,3 +245,240 @@ def test_lead_delete(auth_client):
     lid = state["lead_id"]
     r = auth_client.delete(f"{BASE_URL}/api/leads/{lid}")
     assert r.status_code == 200
+
+
+# =========================================================
+# Phase 2: Blogs, Agents, Newsletter, Properties-by-ids
+# =========================================================
+
+# ---- Blogs ----
+def test_blogs_public_list_published_only(client):
+    r = client.get(f"{BASE_URL}/api/blogs")
+    assert r.status_code == 200
+    assert isinstance(r.json(), list)
+
+
+def test_blog_create_requires_auth():
+    r = requests.post(f"{BASE_URL}/api/blogs", json={"title": "x", "content": "y"})
+    assert r.status_code == 401
+
+
+def test_blog_create(auth_client):
+    payload = {
+        "title": "TEST_Real Estate Investing 101",
+        "excerpt": "Test excerpt",
+        "content": "## Heading\nSome **markdown** content for testing.",
+        "tags": ["test", "investing"],
+        "author": "TEST_Author",
+        "published": True,
+    }
+    r = auth_client.post(f"{BASE_URL}/api/blogs", json=payload)
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["title"] == payload["title"]
+    assert data["slug"]  # auto-generated
+    assert "id" in data
+    state["blog_id"] = data["id"]
+    state["blog_slug"] = data["slug"]
+
+
+def test_blog_get_by_slug(client):
+    slug = state["blog_slug"]
+    r = client.get(f"{BASE_URL}/api/blogs/{slug}")
+    assert r.status_code == 200
+    assert r.json()["slug"] == slug
+
+
+def test_blog_get_by_id(client):
+    bid = state["blog_id"]
+    r = client.get(f"{BASE_URL}/api/blogs/{bid}")
+    assert r.status_code == 200
+    assert r.json()["id"] == bid
+
+
+def test_blog_listed_published(client):
+    r = client.get(f"{BASE_URL}/api/blogs")
+    ids = [b["id"] for b in r.json()]
+    assert state["blog_id"] in ids
+
+
+def test_blog_update_and_unpublish(auth_client):
+    bid = state["blog_id"]
+    payload = {
+        "title": "TEST_Real Estate Investing 101 (Updated)",
+        "content": "Updated content",
+        "published": False,
+        "tags": ["test"],
+        "author": "TEST_Author",
+    }
+    r = auth_client.put(f"{BASE_URL}/api/blogs/{bid}", json=payload)
+    assert r.status_code == 200
+    assert r.json()["title"].endswith("(Updated)")
+    # not in published-only list
+    pub = requests.get(f"{BASE_URL}/api/blogs").json()
+    assert state["blog_id"] not in [b["id"] for b in pub]
+    # in unpublished list (admin can fetch all)
+    allb = auth_client.get(f"{BASE_URL}/api/blogs", params={"published_only": False}).json()
+    assert state["blog_id"] in [b["id"] for b in allb]
+
+
+def test_blog_delete(auth_client):
+    bid = state["blog_id"]
+    r = auth_client.delete(f"{BASE_URL}/api/blogs/{bid}")
+    assert r.status_code == 200
+    g = requests.get(f"{BASE_URL}/api/blogs/{bid}")
+    assert g.status_code == 404
+
+
+# ---- Agents ----
+def test_agents_public_list(client):
+    r = client.get(f"{BASE_URL}/api/agents")
+    assert r.status_code == 200
+    assert isinstance(r.json(), list)
+
+
+def test_agent_create_requires_auth():
+    r = requests.post(f"{BASE_URL}/api/agents", json={"name": "x"})
+    assert r.status_code == 401
+
+
+def test_agent_create(auth_client):
+    payload = {
+        "name": "TEST_Agent Rao",
+        "role": "Senior Consultant",
+        "phone": "9999900000",
+        "email": "agent@example.com",
+        "experience": "5 years",
+        "bio": "TEST bio",
+        "active": True,
+    }
+    r = auth_client.post(f"{BASE_URL}/api/agents", json=payload)
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["name"] == payload["name"]
+    assert "id" in data
+    state["agent_id"] = data["id"]
+
+
+def test_agent_visible_active(client):
+    r = client.get(f"{BASE_URL}/api/agents")
+    assert state["agent_id"] in [a["id"] for a in r.json()]
+
+
+def test_agent_update_deactivate(auth_client):
+    aid = state["agent_id"]
+    payload = {
+        "name": "TEST_Agent Rao",
+        "role": "Lead Consultant",
+        "phone": "9999900000",
+        "email": "agent@example.com",
+        "experience": "6 years",
+        "bio": "TEST bio updated",
+        "active": False,
+    }
+    r = auth_client.put(f"{BASE_URL}/api/agents/{aid}", json=payload)
+    assert r.status_code == 200
+    assert r.json()["active"] is False
+    # not in active list
+    r2 = requests.get(f"{BASE_URL}/api/agents")
+    assert aid not in [a["id"] for a in r2.json()]
+
+
+def test_agent_delete(auth_client):
+    aid = state["agent_id"]
+    r = auth_client.delete(f"{BASE_URL}/api/agents/{aid}")
+    assert r.status_code == 200
+
+
+# ---- Newsletter ----
+def test_newsletter_subscribe_public(client):
+    import uuid as _uuid
+    email = f"test_{_uuid.uuid4().hex[:8]}@example.com"
+    state["nl_email"] = email
+    r = client.post(f"{BASE_URL}/api/newsletter", json={"email": email})
+    assert r.status_code == 200
+    data = r.json()
+    assert data.get("ok") is True
+    assert "Subscribed" in data.get("message", "")
+
+
+def test_newsletter_duplicate(client):
+    email = state["nl_email"]
+    r = client.post(f"{BASE_URL}/api/newsletter", json={"email": email})
+    assert r.status_code == 200
+    assert "Already subscribed" in r.json().get("message", "")
+
+
+def test_newsletter_invalid_email(client):
+    r = client.post(f"{BASE_URL}/api/newsletter", json={"email": "not-an-email"})
+    assert r.status_code == 422
+
+
+def test_newsletter_list_requires_auth():
+    r = requests.get(f"{BASE_URL}/api/newsletter")
+    assert r.status_code == 401
+
+
+def test_newsletter_list_admin(auth_client):
+    r = auth_client.get(f"{BASE_URL}/api/newsletter")
+    assert r.status_code == 200
+    items = r.json()
+    match = next((s for s in items if s["email"] == state["nl_email"]), None)
+    assert match is not None
+    state["nl_id"] = match["id"]
+
+
+def test_newsletter_delete(auth_client):
+    sid = state["nl_id"]
+    r = auth_client.delete(f"{BASE_URL}/api/newsletter/{sid}")
+    assert r.status_code == 200
+    items = auth_client.get(f"{BASE_URL}/api/newsletter").json()
+    assert sid not in [s["id"] for s in items]
+
+
+# ---- Properties by IDs (used by wishlist + compare) ----
+def test_properties_by_ids(auth_client):
+    # create two properties
+    payload_base = {
+        "property_type": "Apartment",
+        "location": "Guntur",
+        "price": 3000000,
+        "area_sqft": 1200,
+        "bedrooms": 2,
+        "bathrooms": 2,
+    }
+    ids = []
+    for i in range(2):
+        p = {**payload_base, "name": f"TEST_BY_IDS_{i}"}
+        r = auth_client.post(f"{BASE_URL}/api/properties", json=p)
+        assert r.status_code == 200
+        ids.append(r.json()["id"])
+    state["byid_ids"] = ids
+
+    # POST by-ids - public endpoint
+    r = requests.post(f"{BASE_URL}/api/properties/by-ids", json={"ids": ids})
+    assert r.status_code == 200, r.text
+    items = r.json()
+    assert isinstance(items, list)
+    assert len(items) == 2
+    assert set([p["id"] for p in items]) == set(ids)
+
+
+def test_properties_by_ids_empty():
+    r = requests.post(f"{BASE_URL}/api/properties/by-ids", json={"ids": []})
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+def test_properties_by_ids_cleanup(auth_client):
+    for pid in state.get("byid_ids", []):
+        auth_client.delete(f"{BASE_URL}/api/properties/{pid}")
+
+
+# ---- Admin Stats includes new counts ----
+def test_admin_stats_new_counts(auth_client):
+    r = auth_client.get(f"{BASE_URL}/api/admin/stats")
+    assert r.status_code == 200
+    data = r.json()
+    for k in ["blogs", "agents", "newsletter_subs"]:
+        assert k in data and isinstance(data[k], int)

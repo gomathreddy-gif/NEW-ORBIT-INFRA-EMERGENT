@@ -1,6 +1,6 @@
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { LayoutDashboard, Building2, Users, Bell, LogOut } from "lucide-react";
+import { LayoutDashboard, Building2, Users, Bell, LogOut, FileText, UserCog, Mail } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import api from "@/lib/api";
 
@@ -20,6 +20,9 @@ const AdminLayout = ({ children }) => {
     { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true, key: "dashboard" },
     { to: "/admin/properties", label: "Properties", icon: Building2, key: "properties" },
     { to: "/admin/leads", label: "Leads & Visits", icon: Users, key: "leads" },
+    { to: "/admin/blog", label: "Blog Posts", icon: FileText, key: "blog" },
+    { to: "/admin/agents", label: "Agents", icon: UserCog, key: "agents" },
+    { to: "/admin/newsletter", label: "Newsletter", icon: Mail, key: "newsletter" },
   ];
 
   const handleLogout = async () => { await logout(); navigate("/admin/login"); };

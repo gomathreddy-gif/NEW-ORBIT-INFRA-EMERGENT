@@ -1,12 +1,13 @@
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import { useState } from "react";
-import { Menu, X, Phone } from "lucide-react";
+import { Menu, X, Phone, Heart, Scale } from "lucide-react";
 import { useI18n } from "@/contexts/I18nContext";
+import { useWishlist } from "@/contexts/WishlistContext";
 
 const Header = () => {
   const { t, lang, setLang } = useI18n();
+  const { wishlist, compare } = useWishlist();
   const [open, setOpen] = useState(false);
-  const navigate = useNavigate();
 
   const links = [
     { to: "/", label: t("nav.home"), key: "home" },
@@ -14,6 +15,8 @@ const Header = () => {
     { to: "/about", label: t("nav.about"), key: "about" },
     { to: "/services", label: t("nav.services"), key: "services" },
     { to: "/loan", label: t("nav.loan"), key: "loan" },
+    { to: "/agents", label: "Agents", key: "agents" },
+    { to: "/blog", label: "Blog", key: "blog" },
     { to: "/contact", label: t("nav.contact"), key: "contact" },
   ];
 
@@ -31,7 +34,7 @@ const Header = () => {
             </div>
           </Link>
 
-          <nav className="hidden lg:flex items-center gap-8">
+          <nav className="hidden xl:flex items-center gap-7">
             {links.map((l) => (
               <NavLink
                 key={l.key}
@@ -39,7 +42,7 @@ const Header = () => {
                 end={l.to === "/"}
                 data-testid={`nav-${l.key}`}
                 className={({ isActive }) =>
-                  `text-sm uppercase tracking-wide font-medium transition-colors ${
+                  `text-xs uppercase tracking-wider font-medium transition-colors ${
                     isActive ? "text-gold" : "text-navy hover:text-gold"
                   }`
                 }
@@ -49,18 +52,26 @@ const Header = () => {
             ))}
           </nav>
 
-          <div className="hidden lg:flex items-center gap-3">
+          <div className="hidden lg:flex items-center gap-2">
+            <Link to="/compare" data-testid="compare-icon" className="relative p-2 text-navy hover:text-gold transition-colors" aria-label="Compare">
+              <Scale className="w-5 h-5" />
+              {compare.length > 0 && <span className="absolute -top-1 -right-1 bg-gold text-navy text-[10px] rounded-full w-4 h-4 flex items-center justify-center font-bold">{compare.length}</span>}
+            </Link>
+            <Link to="/wishlist" data-testid="wishlist-icon" className="relative p-2 text-navy hover:text-gold transition-colors" aria-label="Wishlist">
+              <Heart className="w-5 h-5" />
+              {wishlist.length > 0 && <span className="absolute -top-1 -right-1 bg-gold text-navy text-[10px] rounded-full w-4 h-4 flex items-center justify-center font-bold">{wishlist.length}</span>}
+            </Link>
             <button
               onClick={() => setLang(lang === "en" ? "te" : "en")}
               data-testid="lang-toggle"
-              className="text-xs uppercase tracking-widest font-semibold text-navy border border-line px-3 py-2 hover:border-gold hover:text-gold transition-colors"
+              className="text-xs uppercase tracking-widest font-semibold text-navy border border-line px-3 py-2 hover:border-gold hover:text-gold transition-colors ml-2"
             >
               {lang === "en" ? "తెలుగు" : "English"}
             </button>
             <a
               href="tel:+919441085800"
               data-testid="header-call-btn"
-              className="flex items-center gap-2 bg-navy text-white px-5 py-2.5 rounded-sm hover:bg-navy-hover transition-colors text-sm"
+              className="hidden 2xl:flex items-center gap-2 bg-navy text-white px-5 py-2.5 rounded-sm hover:bg-navy-hover transition-colors text-sm ml-2"
             >
               <Phone className="w-4 h-4" /> 9441085800
             </a>
@@ -96,6 +107,14 @@ const Header = () => {
                 {l.label}
               </NavLink>
             ))}
+            <div className="flex gap-2 pt-3 border-t border-line">
+              <Link to="/wishlist" onClick={() => setOpen(false)} className="flex-1 border border-line py-2 text-center text-sm text-navy">
+                <Heart className="inline w-4 h-4 mr-1" /> Wishlist ({wishlist.length})
+              </Link>
+              <Link to="/compare" onClick={() => setOpen(false)} className="flex-1 border border-line py-2 text-center text-sm text-navy">
+                <Scale className="inline w-4 h-4 mr-1" /> Compare ({compare.length})
+              </Link>
+            </div>
             <button
               onClick={() => { setLang(lang === "en" ? "te" : "en"); }}
               data-testid="mobile-lang-toggle"

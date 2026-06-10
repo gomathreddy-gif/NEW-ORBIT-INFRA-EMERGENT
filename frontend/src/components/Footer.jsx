@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { Phone, Mail, MapPin, Facebook, Instagram, Twitter, Linkedin } from "lucide-react";
+import NewsletterCTA from "@/components/NewsletterCTA";
 
 const Footer = () => {
   return (
@@ -16,9 +17,11 @@ const Footer = () => {
                 <div className="text-[10px] uppercase tracking-[0.2em] text-gold">Projects</div>
               </div>
             </div>
-            <p className="text-white/70 text-sm leading-relaxed">
+            <p className="text-white/70 text-sm leading-relaxed mb-5">
               Your Trusted Real Estate Partner across Andhra Pradesh. Premium properties, transparent dealings, expert loan assistance.
             </p>
+            <div className="text-xs uppercase tracking-[0.2em] text-gold font-bold mb-3">Stay Updated</div>
+            <NewsletterCTA inline />
           </div>
 
           <div>
@@ -29,16 +32,18 @@ const Footer = () => {
               <li><Link to="/about" className="text-white/70 hover:text-gold transition-colors">About Us</Link></li>
               <li><Link to="/services" className="text-white/70 hover:text-gold transition-colors">Services</Link></li>
               <li><Link to="/loan" className="text-white/70 hover:text-gold transition-colors">Home Loan</Link></li>
+              <li><Link to="/agents" className="text-white/70 hover:text-gold transition-colors">Agents</Link></li>
+              <li><Link to="/blog" className="text-white/70 hover:text-gold transition-colors">Blog</Link></li>
               <li><Link to="/contact" className="text-white/70 hover:text-gold transition-colors">Contact</Link></li>
             </ul>
           </div>
 
           <div>
-            <h4 className="text-sm uppercase tracking-[0.2em] text-gold font-bold mb-5">Services</h4>
+            <h4 className="text-sm uppercase tracking-[0.2em] text-gold font-bold mb-5">Tools</h4>
             <ul className="space-y-3 text-sm text-white/70">
-              <li>Buying Property</li>
-              <li>Selling Property</li>
-              <li>Rental Services</li>
+              <li><Link to="/wishlist" className="hover:text-gold">My Wishlist</Link></li>
+              <li><Link to="/compare" className="hover:text-gold">Compare Properties</Link></li>
+              <li><Link to="/loan" className="hover:text-gold">EMI Calculator</Link></li>
               <li>Property Valuation</li>
               <li>Legal Assistance</li>
               <li>Investment Consulting</li>

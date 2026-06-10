@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ShieldCheck, Banknote, CalendarCheck, ArrowRight, Star, Home as HomeIcon, Award, Users, Building2 } from "lucide-react";
 import api from "@/lib/api";
 import PropertyCard from "@/components/PropertyCard";
+import NewsletterCTA from "@/components/NewsletterCTA";
 import { useI18n } from "@/contexts/I18nContext";
 
 const heroImg = "https://images.unsplash.com/photo-1760067537640-6ffab10b27d2?crop=entropy&cs=srgb&fm=jpg&q=85&w=2000";
@@ -206,6 +207,9 @@ const Home = () => {
           </div>
         </div>
       </section>
+
+      {/* NEWSLETTER */}
+      <NewsletterCTA />
 
       {/* CTA */}
       <section className="py-16 bg-gold">

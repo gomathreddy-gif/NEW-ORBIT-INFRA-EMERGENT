@@ -146,6 +146,29 @@ class TestimonialInput(BaseModel):
     avatar_url: Optional[str] = ""
     approved: bool = True
 
+class BlogInput(BaseModel):
+    title: str
+    slug: Optional[str] = ""
+    excerpt: str = ""
+    content: str
+    cover_image: Optional[str] = ""
+    tags: List[str] = []
+    author: str = "Orbit Infra Team"
+    published: bool = True
+
+class AgentInput(BaseModel):
+    name: str
+    role: str = "Property Consultant"
+    phone: str = ""
+    email: str = ""
+    experience: str = ""
+    bio: str = ""
+    avatar: Optional[str] = ""
+    active: bool = True
+
+class NewsletterInput(BaseModel):
+    email: EmailStr
+
 # ---- Startup ----
 @app.on_event("startup")
 async def startup():
@@ -156,6 +179,11 @@ async def startup():
     await db.leads.create_index("id", unique=True)
     await db.testimonials.create_index("id", unique=True)
     await db.notifications.create_index("id", unique=True)
+    await db.blogs.create_index("id", unique=True)
+    await db.blogs.create_index("slug")
+    await db.agents.create_index("id", unique=True)
+    await db.newsletter_subs.create_index("email", unique=True)
+    await db.newsletter_subs.create_index("id", unique=True)
 
     # Seed admin
     existing = await db.users.find_one({"email": ADMIN_EMAIL.lower()})
@@ -420,7 +448,124 @@ async def admin_stats(request: Request):
         "loan_requests": await db.leads.count_documents({"lead_type": "loan"}),
         "enquiries": await db.leads.count_documents({"lead_type": "enquiry"}),
         "unread_notifications": await db.notifications.count_documents({"read": False}),
+        "blogs": await db.blogs.count_documents({}),
+        "agents": await db.agents.count_documents({}),
+        "newsletter_subs": await db.newsletter_subs.count_documents({}),
     }
+
+# ---- Blog Routes ----
+@api.get("/blogs")
+async def list_blogs(published_only: bool = True, limit: int = 50):
+    q = {"published": True} if published_only else {}
+    items = await db.blogs.find(q, {"_id": 0}).sort("created_at", -1).to_list(limit)
+    return items
+
+@api.get("/blogs/{slug}")
+async def get_blog(slug: str):
+    b = await db.blogs.find_one({"slug": slug}, {"_id": 0})
+    if not b:
+        b = await db.blogs.find_one({"id": slug}, {"_id": 0})
+    if not b:
+        raise HTTPException(404, "Blog not found")
+    return b
+
+@api.post("/blogs")
+async def create_blog(body: BlogInput, request: Request):
+    await get_current_admin(request)
+    doc = body.model_dump()
+    doc["id"] = str(uuid.uuid4())
+    if not doc.get("slug"):
+        base = "".join(c if c.isalnum() else "-" for c in doc["title"].lower())[:60].strip("-")
+        doc["slug"] = f"{base}-{doc['id'][:8]}"
+    doc["created_at"] = datetime.now(timezone.utc).isoformat()
+    doc["updated_at"] = doc["created_at"]
+    await db.blogs.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api.put("/blogs/{bid}")
+async def update_blog(bid: str, body: BlogInput, request: Request):
+    await get_current_admin(request)
+    upd = body.model_dump()
+    upd["updated_at"] = datetime.now(timezone.utc).isoformat()
+    res = await db.blogs.update_one({"id": bid}, {"$set": upd})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Blog not found")
+    b = await db.blogs.find_one({"id": bid}, {"_id": 0})
+    return b
+
+@api.delete("/blogs/{bid}")
+async def delete_blog(bid: str, request: Request):
+    await get_current_admin(request)
+    await db.blogs.delete_one({"id": bid})
+    return {"ok": True}
+
+# ---- Agent Routes ----
+@api.get("/agents")
+async def list_agents(active_only: bool = True):
+    q = {"active": True} if active_only else {}
+    items = await db.agents.find(q, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return items
+
+@api.post("/agents")
+async def create_agent(body: AgentInput, request: Request):
+    await get_current_admin(request)
+    doc = body.model_dump()
+    doc["id"] = str(uuid.uuid4())
+    doc["created_at"] = datetime.now(timezone.utc).isoformat()
+    await db.agents.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api.put("/agents/{aid}")
+async def update_agent(aid: str, body: AgentInput, request: Request):
+    await get_current_admin(request)
+    res = await db.agents.update_one({"id": aid}, {"$set": body.model_dump()})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Agent not found")
+    a = await db.agents.find_one({"id": aid}, {"_id": 0})
+    return a
+
+@api.delete("/agents/{aid}")
+async def delete_agent(aid: str, request: Request):
+    await get_current_admin(request)
+    await db.agents.delete_one({"id": aid})
+    return {"ok": True}
+
+# ---- Newsletter ----
+@api.post("/newsletter")
+async def subscribe_newsletter(body: NewsletterInput):
+    email = body.email.lower()
+    existing = await db.newsletter_subs.find_one({"email": email})
+    if existing:
+        return {"ok": True, "message": "Already subscribed"}
+    await db.newsletter_subs.insert_one({
+        "id": str(uuid.uuid4()),
+        "email": email,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"ok": True, "message": "Subscribed"}
+
+@api.get("/newsletter")
+async def list_newsletter(request: Request):
+    await get_current_admin(request)
+    items = await db.newsletter_subs.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return items
+
+@api.delete("/newsletter/{sid}")
+async def delete_newsletter(sid: str, request: Request):
+    await get_current_admin(request)
+    await db.newsletter_subs.delete_one({"id": sid})
+    return {"ok": True}
+
+# ---- Properties by IDs (for compare) ----
+@api.post("/properties/by-ids")
+async def properties_by_ids(payload: dict):
+    ids = payload.get("ids", [])
+    if not ids:
+        return []
+    items = await db.properties.find({"id": {"$in": ids}}, {"_id": 0}).to_list(20)
+    return items
 
 @api.get("/")
 async def root():
