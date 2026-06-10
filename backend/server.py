@@ -94,10 +94,39 @@ async def get_current_admin(request: Request) -> dict:
     except jwt.InvalidTokenError:
         raise HTTPException(401, "Invalid token")
 
+async def get_current_user(request: Request) -> dict:
+    token = request.cookies.get("access_token")
+    if not token:
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            token = auth[7:]
+    if not token:
+        raise HTTPException(401, "Not authenticated")
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
+        user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
+        if not user:
+            raise HTTPException(401, "User not found")
+        return user
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(401, "Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(401, "Invalid token")
+
 # ---- Models ----
 class LoginInput(BaseModel):
     email: EmailStr
     password: str
+
+class RegisterInput(BaseModel):
+    name: str
+    email: EmailStr
+    password: str
+    mobile: Optional[str] = ""
+
+class SavedSearchInput(BaseModel):
+    name: str
+    filters: dict
 
 class PropertyInput(BaseModel):
     name: str
@@ -113,11 +142,14 @@ class PropertyInput(BaseModel):
     description: str = ""
     amenities: List[str] = []
     floor_plans: List[str] = []
+    floor_plan_pdfs: List[dict] = []  # [{name, path}]
     nearby_schools: List[str] = []
     nearby_hospitals: List[str] = []
     nearby_shopping: List[str] = []
     video_url: Optional[str] = ""
     map_url: Optional[str] = ""
+    lat: Optional[float] = None
+    lng: Optional[float] = None
     featured: bool = False
     images: List[str] = []  # storage paths
 
@@ -184,6 +216,8 @@ async def startup():
     await db.agents.create_index("id", unique=True)
     await db.newsletter_subs.create_index("email", unique=True)
     await db.newsletter_subs.create_index("id", unique=True)
+    await db.saved_searches.create_index("id", unique=True)
+    await db.saved_searches.create_index("user_id")
 
     # Seed admin
     existing = await db.users.find_one({"email": ADMIN_EMAIL.lower()})
@@ -243,8 +277,30 @@ async def logout(response: Response):
 
 @api.get("/auth/me")
 async def me(request: Request):
-    user = await get_current_admin(request)
+    user = await get_current_user(request)
     return user
+
+@api.post("/auth/register")
+async def register(body: RegisterInput, response: Response):
+    email = body.email.lower()
+    existing = await db.users.find_one({"email": email})
+    if existing:
+        raise HTTPException(400, "Email already registered")
+    user_id = str(uuid.uuid4())
+    doc = {
+        "id": user_id,
+        "email": email,
+        "password_hash": hash_password(body.password),
+        "name": body.name,
+        "mobile": body.mobile or "",
+        "role": "customer",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.users.insert_one(doc)
+    token = create_token(user_id, email)
+    response.set_cookie("access_token", token, httponly=True, secure=False,
+                        samesite="lax", max_age=604800, path="/")
+    return {"token": token, "user": {"id": user_id, "email": email, "name": body.name, "role": "customer"}}
 
 # ---- Property Routes ----
 @api.get("/properties")
@@ -323,6 +379,18 @@ async def upload_image(request: Request, file: UploadFile = File(...)):
     data = await file.read()
     result = put_object(path, data, file.content_type or f"image/{ext}")
     return {"path": result["path"], "url": f"/api/files/{result['path']}"}
+
+@api.post("/upload-pdf")
+async def upload_pdf(request: Request, file: UploadFile = File(...)):
+    await get_current_admin(request)
+    ext = (file.filename or "doc").split(".")[-1].lower()
+    if ext != "pdf":
+        raise HTTPException(400, "Only PDF files allowed")
+    name = (file.filename or "floorplan.pdf").rsplit("/", 1)[-1]
+    path = f"{APP_NAME}/floorplans/{uuid.uuid4()}.pdf"
+    data = await file.read()
+    result = put_object(path, data, "application/pdf")
+    return {"path": result["path"], "name": name, "url": f"/api/files/{result['path']}"}
 
 @api.get("/files/{path:path}")
 async def serve_file(path: str):
@@ -556,6 +624,33 @@ async def list_newsletter(request: Request):
 async def delete_newsletter(sid: str, request: Request):
     await get_current_admin(request)
     await db.newsletter_subs.delete_one({"id": sid})
+    return {"ok": True}
+
+# ---- Saved Searches (customer) ----
+@api.get("/saved-searches")
+async def list_saved_searches(request: Request):
+    user = await get_current_user(request)
+    items = await db.saved_searches.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return items
+
+@api.post("/saved-searches")
+async def create_saved_search(body: SavedSearchInput, request: Request):
+    user = await get_current_user(request)
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "name": body.name,
+        "filters": body.filters,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.saved_searches.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api.delete("/saved-searches/{sid}")
+async def delete_saved_search(sid: str, request: Request):
+    user = await get_current_user(request)
+    await db.saved_searches.delete_one({"id": sid, "user_id": user["id"]})
     return {"ok": True}
 
 # ---- Properties by IDs (for compare) ----

@@ -1,12 +1,14 @@
 import { Link, NavLink } from "react-router-dom";
 import { useState } from "react";
-import { Menu, X, Phone, Heart, Scale } from "lucide-react";
+import { Menu, X, Phone, Heart, Scale, User, LogIn } from "lucide-react";
 import { useI18n } from "@/contexts/I18nContext";
 import { useWishlist } from "@/contexts/WishlistContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Header = () => {
   const { t, lang, setLang } = useI18n();
   const { wishlist, compare } = useWishlist();
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
 
   const links = [
@@ -61,6 +63,17 @@ const Header = () => {
               <Heart className="w-5 h-5" />
               {wishlist.length > 0 && <span className="absolute -top-1 -right-1 bg-gold text-navy text-[10px] rounded-full w-4 h-4 flex items-center justify-center font-bold">{wishlist.length}</span>}
             </Link>
+            {user ? (
+              <Link to="/account" data-testid="account-icon" className="flex items-center gap-1.5 p-2 text-navy hover:text-gold transition-colors">
+                <div className="w-7 h-7 bg-navy text-gold rounded-full flex items-center justify-center text-xs font-bold">
+                  {(user.name || "U").charAt(0).toUpperCase()}
+                </div>
+              </Link>
+            ) : (
+              <Link to="/login" data-testid="login-icon" className="p-2 text-navy hover:text-gold transition-colors" aria-label="Sign In">
+                <LogIn className="w-5 h-5" />
+              </Link>
+            )}
             <button
               onClick={() => setLang(lang === "en" ? "te" : "en")}
               data-testid="lang-toggle"

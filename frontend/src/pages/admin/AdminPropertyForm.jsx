@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Upload, X } from "lucide-react";
+import { Upload, X, FileText } from "lucide-react";
 import { toast } from "sonner";
 import api, { fileUrl } from "@/lib/api";
 
@@ -10,7 +10,7 @@ const blank = {
   status: "Available", project_status: "Ongoing",
   description: "", amenities: "", floor_plans: "",
   nearby_schools: "", nearby_hospitals: "", nearby_shopping: "",
-  video_url: "", map_url: "", featured: false, images: [],
+  video_url: "", map_url: "", lat: "", lng: "", featured: false, images: [], floor_plan_pdfs: [],
 };
 
 const toArr = (s) => (Array.isArray(s) ? s : (s || "").split(",").map(x => x.trim()).filter(Boolean));
@@ -60,6 +60,28 @@ const AdminPropertyForm = () => {
 
   const removeImg = (i) => setF((s) => ({ ...s, images: s.images.filter((_, k) => k !== i) }));
 
+  const [uploadingPdf, setUploadingPdf] = useState(false);
+  const onUploadPdf = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    setUploadingPdf(true);
+    try {
+      const uploaded = [];
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append("file", file);
+        const r = await api.post("/upload-pdf", fd, { headers: { "Content-Type": "multipart/form-data" } });
+        uploaded.push({ path: r.data.path, name: r.data.name });
+      }
+      setF((s) => ({ ...s, floor_plan_pdfs: [...(s.floor_plan_pdfs || []), ...uploaded] }));
+      toast.success(`${uploaded.length} PDF(s) uploaded`);
+    } catch {
+      toast.error("PDF upload failed");
+    }
+    setUploadingPdf(false);
+  };
+  const removePdf = (i) => setF((s) => ({ ...s, floor_plan_pdfs: s.floor_plan_pdfs.filter((_, k) => k !== i) }));
+
   const submit = async (e) => {
     e.preventDefault();
     setBusy(true);
@@ -70,6 +92,9 @@ const AdminPropertyForm = () => {
         area_sqft: Number(f.area_sqft),
         bedrooms: Number(f.bedrooms) || 0,
         bathrooms: Number(f.bathrooms) || 0,
+        lat: f.lat === "" || f.lat == null ? null : Number(f.lat),
+        lng: f.lng === "" || f.lng == null ? null : Number(f.lng),
+        floor_plan_pdfs: f.floor_plan_pdfs || [],
         amenities: toArr(f.amenities),
         floor_plans: toArr(f.floor_plans),
         nearby_schools: toArr(f.nearby_schools),
@@ -150,7 +175,31 @@ const AdminPropertyForm = () => {
           <Field label="Nearby Shopping"><input value={f.nearby_shopping} onChange={upd("nearby_shopping")} className="input" /></Field>
           <Field label="Video URL (YouTube embed)"><input value={f.video_url} onChange={upd("video_url")} className="input" placeholder="https://www.youtube.com/embed/..." /></Field>
           <Field label="Google Maps Embed URL"><input value={f.map_url} onChange={upd("map_url")} className="input" /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Latitude (for map pin)"><input type="number" step="any" value={f.lat ?? ""} onChange={upd("lat")} data-testid="prop-lat" className="input" placeholder="e.g. 16.5062" /></Field>
+            <Field label="Longitude"><input type="number" step="any" value={f.lng ?? ""} onChange={upd("lng")} data-testid="prop-lng" className="input" placeholder="e.g. 80.6480" /></Field>
+          </div>
         </div>
+      </div>
+
+      <div className="bg-white border border-line p-6">
+        <h3 className="font-serif text-lg text-navy mb-4">Floor Plan PDFs</h3>
+        <label className="flex items-center gap-3 bg-surface border border-dashed border-line p-4 cursor-pointer hover:border-gold transition-colors" data-testid="upload-pdf-btn">
+          <FileText className="w-5 h-5 text-gold" />
+          <span className="text-sm text-ink-muted">{uploadingPdf ? "Uploading..." : "Click to upload floor plan PDFs (multiple allowed)"}</span>
+          <input type="file" accept="application/pdf" multiple onChange={onUploadPdf} className="hidden" />
+        </label>
+        {f.floor_plan_pdfs?.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+            {f.floor_plan_pdfs.map((pdf, i) => (
+              <div key={i} className="flex items-center gap-3 bg-surface border border-line p-3" data-testid={`pdf-preview-${i}`}>
+                <FileText className="w-5 h-5 text-gold" />
+                <a href={fileUrl(pdf.path)} target="_blank" rel="noreferrer" className="flex-1 text-sm text-navy hover:text-gold truncate">{pdf.name}</a>
+                <button type="button" onClick={() => removePdf(i)} className="text-red-600"><X className="w-4 h-4" /></button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="bg-white border border-line p-6">

@@ -8,14 +8,14 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Only verify session on admin routes to avoid 401 noise on public pages
-    const onAdmin = typeof window !== "undefined" && window.location.pathname.startsWith("/admin");
-    if (!onAdmin) { setLoading(false); return; }
+    const token = localStorage.getItem("orbit_token");
+    if (!token) { setLoading(false); return; }
     (async () => {
       try {
         const { data } = await api.get("/auth/me");
         setUser(data);
       } catch {
+        localStorage.removeItem("orbit_token");
         setUser(null);
       } finally {
         setLoading(false);
@@ -31,13 +31,15 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
-    try { await api.post("/auth/logout"); } catch {}
+    try { await api.post("/auth/logout"); } catch { /* ignore */ }
     localStorage.removeItem("orbit_token");
     setUser(null);
   };
 
+  const setUserDirect = (u) => setUser(u);
+
   return (
-    <AuthCtx.Provider value={{ user, loading, login, logout }}>
+    <AuthCtx.Provider value={{ user, loading, login, logout, setUserDirect }}>
       {children}
     </AuthCtx.Provider>
   );

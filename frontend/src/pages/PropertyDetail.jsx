@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { MapPin, BedDouble, Bath, Maximize, Phone, CheckCircle2, GraduationCap, Stethoscope, ShoppingBag, X } from "lucide-react";
+import { MapPin, BedDouble, Bath, Maximize, Phone, CheckCircle2, GraduationCap, Stethoscope, ShoppingBag, X, FileDown } from "lucide-react";
 import { toast } from "sonner";
 import api, { fileUrl } from "@/lib/api";
+import PropertyMap from "@/components/PropertyMap";
 
 const fallback = "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?crop=entropy&cs=srgb&fm=jpg&q=85&w=1600";
 
@@ -115,6 +116,23 @@ const PropertyDetail = () => {
               </div>
             )}
 
+            {p.floor_plan_pdfs?.length > 0 && (
+              <div className="mb-8">
+                <h2 className="font-serif text-2xl text-navy mb-3">Floor Plans</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3" data-testid="floor-plans-list">
+                  {p.floor_plan_pdfs.map((fp, i) => (
+                    <a key={i} href={fileUrl(fp.path)} target="_blank" rel="noreferrer" data-testid={`floor-plan-${i}`} className="flex items-center gap-3 bg-surface border-l-2 border-gold p-4 hover:bg-white hover:border hover:border-gold transition-colors">
+                      <FileDown className="w-6 h-6 text-gold" />
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-navy">{fp.name || `Floor Plan ${i + 1}`}</div>
+                        <div className="text-xs text-ink-muted">PDF • Click to download</div>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="grid md:grid-cols-3 gap-6 mt-10">
               {[
                 { icon: GraduationCap, title: "Nearby Schools", items: p.nearby_schools },
@@ -138,6 +156,13 @@ const PropertyDetail = () => {
                 <div className="aspect-[16/9] bg-surface">
                   <iframe src={p.map_url} title="Location" className="w-full h-full border-0" loading="lazy" />
                 </div>
+              </div>
+            )}
+
+            {typeof p.lat === "number" && typeof p.lng === "number" && (
+              <div className="mt-10">
+                <h2 className="font-serif text-2xl text-navy mb-3">On the Map</h2>
+                <PropertyMap properties={[p]} height={380} single />
               </div>
             )}
           </div>

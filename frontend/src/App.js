@@ -21,6 +21,9 @@ import BlogDetail from "@/pages/BlogDetail";
 import Agents from "@/pages/Agents";
 import Wishlist from "@/pages/Wishlist";
 import Compare from "@/pages/Compare";
+import CustomerLogin from "@/pages/CustomerLogin";
+import CustomerRegister from "@/pages/CustomerRegister";
+import CustomerAccount from "@/pages/CustomerAccount";
 
 import AdminLogin from "@/pages/admin/AdminLogin";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
@@ -45,7 +48,7 @@ const PublicLayout = ({ children }) => (
 const ProtectedAdmin = ({ children }) => {
   const { user, loading } = useAuth();
   if (loading) return <div className="min-h-screen flex items-center justify-center text-navy">Loading...</div>;
-  if (!user) return <Navigate to="/admin/login" replace />;
+  if (!user || user.role !== "admin") return <Navigate to="/admin/login" replace />;
   return children;
 };
 
@@ -73,6 +76,9 @@ function App() {
               <Route path="/agents" element={<PublicLayout><Agents /></PublicLayout>} />
               <Route path="/wishlist" element={<PublicLayout><Wishlist /></PublicLayout>} />
               <Route path="/compare" element={<PublicLayout><Compare /></PublicLayout>} />
+              <Route path="/login" element={<PublicLayout><CustomerLogin /></PublicLayout>} />
+              <Route path="/register" element={<PublicLayout><CustomerRegister /></PublicLayout>} />
+              <Route path="/account" element={<PublicLayout><CustomerAccount /></PublicLayout>} />
 
               <Route path="/admin/login" element={<AdminLogin />} />
               <Route path="/admin" element={<AdminPage><AdminDashboard /></AdminPage>} />

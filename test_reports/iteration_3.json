@@ -1,0 +1,49 @@
+{
+  "summary": "Iteration 3 — Phase 3 features (Live Maps, Floor Plan PDFs, Customer auth + Saved Searches) tested. Backend: 20/20 pytest pass in /app/backend/tests/test_phase3.py (register/customer-login/me-any-role/RBAC isolation/saved-searches CRUD scoped to user/PDF upload accept-and-reject/property lat-lng + floor_plan_pdfs persistence). Frontend: registration→/account redirect, customer login→/account, admin login→/admin, header login-icon↔account-icon swap, Properties grid/map view toggle with Leaflet OSM tiles + custom navy/gold pin rendered for the test property, PropertyDetail interactive Leaflet map renders when lat/lng present, AdminPropertyForm exposes prop-lat, prop-lng, upload-pdf-btn testids. Save Search button is wired to window.prompt (works but blocks Playwright click; verified via direct API).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/saved-searches", "issue": "Endpoint uses get_current_user so it works for both admin and customer; spec said 'customer auth required'. If you want customers-only, add a role check. Currently admin can also create saved searches (low risk)."},
+      {"endpoint": "GET /api/auth/me", "issue": "Returns the full user document (minus password_hash). Confirmed working for both roles. Note frontend may still call this on public pages and log 401s (carry-over from iter-1)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Properties /properties — Save Search", "issue": "Uses window.prompt() for capturing search name. window.prompt blocks the page event loop until dialog is dismissed which makes Playwright click()/automation flaky. Suggest replacing with a shadcn Dialog input. Confirmed via API path that the saved-search creates correctly (200 with id, user_id, filters).", "selector": "[data-testid=\"save-search-btn\"]", "priority": "LOW"},
+      {"component": "CustomerAccount /account", "issue": "After SPA hard navigation (page.goto('/account')) immediately after registration, the saved-searches list and logout button can be slow to appear (>2s) because AuthContext re-hydrates via /auth/me and then fetches /saved-searches. The in-flow case (Register submit → in-app redirect) renders fine. Consider showing a skeleton or pre-hydrating from localStorage to avoid this perceived blank state.", "selector": "[data-testid=\"logout-btn\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_phase3.py",
+    "/app/test_reports/pytest/phase3_results.xml",
+    "/app/backend/tests/backend_test.py"
+  ],
+  "action_items": [
+    "(Optional) Replace window.prompt in Properties.jsx 'Save Search' with a shadcn Dialog for better UX and testability.",
+    "(Optional) Restrict POST/GET /api/saved-searches to role=='customer' if admin should not see/own them.",
+    "(Optional) Add a small loading state to /account while AuthContext hydrates to avoid an apparent blank page on direct navigation."
+  ],
+  "critical_code_review_comments": [
+    "server.py: PropertyInput now includes lat/lng/floor_plan_pdfs — persisted and returned correctly. No _id leakage observed (all queries use {_id: 0}).",
+    "server.py: /api/upload-pdf validates extension server-side (rejects .txt with 400) and requires admin (rejects customer with 403). Good.",
+    "server.py: /api/auth/register correctly hashes with bcrypt ($2b$), sets httpOnly cookie, and inserts role='customer'. Duplicate email returns 400.",
+    "server.py: /api/saved-searches scopes by user_id on both list and delete — verified via 2nd-customer isolation test. Good multi-tenant hygiene.",
+    "Frontend: Custom Leaflet DivIcon (navy circle with gold accent) renders for properties with lat/lng on /properties Map view and PropertyDetail map.",
+    "Frontend: Save Search uses window.prompt — works but not ideal UX/testability."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase3.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (20/20 phase3 + earlier 47 still passing in backend_test.py)",
+    "frontend": "~95% (all critical Phase 3 flows verified; minor /account hydration delay and prompt-based save-search noted)"
+  },
+  "test_credentials": "Admin: orbitinfra4039@gmail.com / .orbit@4039. Test customers created during run: ui_cust_*@example.com / test12345 (multiple), plus pytest-created test_cust_*@example.com / test12345.",
+  "seed_data_creation": "Created via API for map testing: property id 67b1448a-42bd-4e60-8837-db90439a70c3 'TEST_Map Pin Villa' at lat=16.5062 lng=80.648. Multiple TEST_ saved searches and TEST_GeoVilla properties were created and cleaned up by pytest. Note: API-created Map Pin Villa is left in DB so main agent can verify the map pin visually; safe to delete.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Phase 3 backend coverage in /app/backend/tests/test_phase3.py — run: pytest /app/backend/tests/ -v. Important data-testids in play this iteration: login-icon, account-icon, reg-name, reg-email, reg-password, reg-submit, login-email, login-password, login-submit, logout-btn, view-grid-btn, view-map-btn, save-search-btn, run-search-N, delete-search-N, prop-lat, prop-lng, upload-pdf-btn, pdf-preview-{i}. Save Search uses native window.prompt — use page.evaluate to call /api/saved-searches directly when automating. /admin/properties/new has all new fields. Leaflet maps render on /properties (Map view) and PropertyDetail when lat/lng present; OSM tile layer + custom navy/gold marker confirmed.",
+  "rca of the issue": "No production bugs found. The two minor frontend notes are RCA'd: (1) window.prompt blocks Playwright click() because the synchronous prompt halts the JS event loop until dismissed — by design of native prompts; (2) /account hydration delay is because AuthContext mounts → calls /auth/me → then triggers a fetch for /saved-searches; on a cold page load this is two sequential round-trips before the page populates. Neither blocks user functionality; both are minor UX improvements."
+}
