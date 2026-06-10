@@ -1,55 +1,69 @@
-import { useEffect } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
-import { HOME } from "@/constants/testIds";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Toaster } from "sonner";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { I18nProvider } from "@/contexts/I18nContext";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
+import WhatsAppButton from "@/components/WhatsAppButton";
 
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
+import Home from "@/pages/Home";
+import Properties from "@/pages/Properties";
+import PropertyDetail from "@/pages/PropertyDetail";
+import About from "@/pages/About";
+import Services from "@/pages/Services";
+import Loan from "@/pages/Loan";
+import Contact from "@/pages/Contact";
 
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
+import AdminLogin from "@/pages/admin/AdminLogin";
+import AdminDashboard from "@/pages/admin/AdminDashboard";
+import AdminProperties from "@/pages/admin/AdminProperties";
+import AdminPropertyForm from "@/pages/admin/AdminPropertyForm";
+import AdminLeads from "@/pages/admin/AdminLeads";
+import AdminLayout from "@/components/AdminLayout";
 
-  return (
-    <div>
-      <header className="App-header">
-        <a
-          data-testid={HOME.emergentLink}
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
+const PublicLayout = ({ children }) => (
+  <div className="min-h-screen flex flex-col bg-white">
+    <Header />
+    <main className="flex-1">{children}</main>
+    <Footer />
+    <WhatsAppButton />
+  </div>
+);
+
+const ProtectedAdmin = ({ children }) => {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="min-h-screen flex items-center justify-center text-navy">Loading...</div>;
+  if (!user) return <Navigate to="/admin/login" replace />;
+  return children;
 };
 
 function App() {
   return (
-    <div className="App">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </div>
+    <I18nProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <Toaster position="top-right" richColors />
+          <Routes>
+            <Route path="/" element={<PublicLayout><Home /></PublicLayout>} />
+            <Route path="/properties" element={<PublicLayout><Properties /></PublicLayout>} />
+            <Route path="/properties/:id" element={<PublicLayout><PropertyDetail /></PublicLayout>} />
+            <Route path="/about" element={<PublicLayout><About /></PublicLayout>} />
+            <Route path="/services" element={<PublicLayout><Services /></PublicLayout>} />
+            <Route path="/loan" element={<PublicLayout><Loan /></PublicLayout>} />
+            <Route path="/contact" element={<PublicLayout><Contact /></PublicLayout>} />
+
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/admin" element={<ProtectedAdmin><AdminLayout><AdminDashboard /></AdminLayout></ProtectedAdmin>} />
+            <Route path="/admin/properties" element={<ProtectedAdmin><AdminLayout><AdminProperties /></AdminLayout></ProtectedAdmin>} />
+            <Route path="/admin/properties/new" element={<ProtectedAdmin><AdminLayout><AdminPropertyForm /></AdminLayout></ProtectedAdmin>} />
+            <Route path="/admin/properties/:id/edit" element={<ProtectedAdmin><AdminLayout><AdminPropertyForm /></AdminLayout></ProtectedAdmin>} />
+            <Route path="/admin/leads" element={<ProtectedAdmin><AdminLayout><AdminLeads /></AdminLayout></ProtectedAdmin>} />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </I18nProvider>
   );
 }
 

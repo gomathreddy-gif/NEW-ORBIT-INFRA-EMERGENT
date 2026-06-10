@@ -1,73 +1,433 @@
-from fastapi import FastAPI, APIRouter
 from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
-import os
-import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List
-import uuid
-from datetime import datetime, timezone
-
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, UploadFile, File, Query, Header
+from fastapi.responses import StreamingResponse
+from starlette.middleware.cors import CORSMiddleware
+from motor.motor_asyncio import AsyncIOMotorClient
+from pydantic import BaseModel, Field, EmailStr
+from typing import List, Optional
+from datetime import datetime, timezone, timedelta
+import os, uuid, logging, io
+import bcrypt, jwt, requests
+
+# ---- Setup ----
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Create the main app without a prefix
-app = FastAPI()
+JWT_SECRET = os.environ['JWT_SECRET']
+JWT_ALGO = "HS256"
+ADMIN_EMAIL = os.environ['ADMIN_EMAIL']
+ADMIN_PASSWORD = os.environ['ADMIN_PASSWORD']
+EMERGENT_KEY = os.environ.get('EMERGENT_LLM_KEY')
+STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
+APP_NAME = "orbit-infra"
 
-# Create a router with the /api prefix
-api_router = APIRouter(prefix="/api")
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("orbit")
 
+app = FastAPI(title="Orbit Infra Projects API")
+api = APIRouter(prefix="/api")
 
-# Define Models
-class StatusCheck(BaseModel):
-    model_config = ConfigDict(extra="ignore")  # Ignore MongoDB's _id field
-    
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+# ---- Storage ----
+storage_key = None
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
+def init_storage():
+    global storage_key
+    if storage_key:
+        return storage_key
+    resp = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_KEY}, timeout=30)
+    resp.raise_for_status()
+    storage_key = resp.json()["storage_key"]
+    return storage_key
 
-# Add your routes to the router instead of directly to app
-@api_router.get("/")
+def put_object(path: str, data: bytes, content_type: str) -> dict:
+    key = init_storage()
+    resp = requests.put(f"{STORAGE_URL}/objects/{path}",
+                        headers={"X-Storage-Key": key, "Content-Type": content_type},
+                        data=data, timeout=120)
+    resp.raise_for_status()
+    return resp.json()
+
+def get_object(path: str):
+    key = init_storage()
+    resp = requests.get(f"{STORAGE_URL}/objects/{path}",
+                        headers={"X-Storage-Key": key}, timeout=60)
+    resp.raise_for_status()
+    return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
+
+# ---- Auth utils ----
+def hash_password(p: str) -> str:
+    return bcrypt.hashpw(p.encode(), bcrypt.gensalt()).decode()
+
+def verify_password(p: str, h: str) -> bool:
+    try:
+        return bcrypt.checkpw(p.encode(), h.encode())
+    except Exception:
+        return False
+
+def create_token(uid: str, email: str) -> str:
+    payload = {"sub": uid, "email": email, "type": "access",
+               "exp": datetime.now(timezone.utc) + timedelta(days=7)}
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGO)
+
+async def get_current_admin(request: Request) -> dict:
+    token = request.cookies.get("access_token")
+    if not token:
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            token = auth[7:]
+    if not token:
+        raise HTTPException(401, "Not authenticated")
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
+        user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
+        if not user or user.get("role") != "admin":
+            raise HTTPException(403, "Forbidden")
+        return user
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(401, "Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(401, "Invalid token")
+
+# ---- Models ----
+class LoginInput(BaseModel):
+    email: EmailStr
+    password: str
+
+class PropertyInput(BaseModel):
+    name: str
+    property_type: str  # Apartment, Villa, Plot, Commercial, House
+    location: str
+    city: Optional[str] = "Andhra Pradesh"
+    price: float
+    area_sqft: float
+    bedrooms: int = 0
+    bathrooms: int = 0
+    status: str = "Available"  # Available, Sold, Under Construction, Ready To Move, Upcoming
+    project_status: str = "Ongoing"  # Ongoing, Completed, Upcoming
+    description: str = ""
+    amenities: List[str] = []
+    floor_plans: List[str] = []
+    nearby_schools: List[str] = []
+    nearby_hospitals: List[str] = []
+    nearby_shopping: List[str] = []
+    video_url: Optional[str] = ""
+    map_url: Optional[str] = ""
+    featured: bool = False
+    images: List[str] = []  # storage paths
+
+class LeadInput(BaseModel):
+    name: str
+    mobile: str
+    email: Optional[str] = ""
+    message: Optional[str] = ""
+    lead_type: str = "enquiry"  # enquiry, site_visit, loan, callback
+    property_id: Optional[str] = None
+    property_name: Optional[str] = None
+    visit_date: Optional[str] = None
+    visit_time: Optional[str] = None
+    occupation: Optional[str] = None
+    monthly_income: Optional[float] = None
+    property_value: Optional[float] = None
+
+class LeadStatusUpdate(BaseModel):
+    status: str  # New, Contacted, Follow Up, Closed
+
+class TestimonialInput(BaseModel):
+    name: str
+    location: Optional[str] = ""
+    rating: int = 5
+    message: str
+    avatar_url: Optional[str] = ""
+    approved: bool = True
+
+# ---- Startup ----
+@app.on_event("startup")
+async def startup():
+    # Indexes
+    await db.users.create_index("email", unique=True)
+    await db.users.create_index("id", unique=True)
+    await db.properties.create_index("id", unique=True)
+    await db.leads.create_index("id", unique=True)
+    await db.testimonials.create_index("id", unique=True)
+    await db.notifications.create_index("id", unique=True)
+
+    # Seed admin
+    existing = await db.users.find_one({"email": ADMIN_EMAIL.lower()})
+    if not existing:
+        await db.users.insert_one({
+            "id": str(uuid.uuid4()),
+            "email": ADMIN_EMAIL.lower(),
+            "password_hash": hash_password(ADMIN_PASSWORD),
+            "name": "Orbit Admin",
+            "role": "admin",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        logger.info(f"Admin user seeded: {ADMIN_EMAIL}")
+    elif not verify_password(ADMIN_PASSWORD, existing["password_hash"]):
+        await db.users.update_one({"email": ADMIN_EMAIL.lower()},
+                                  {"$set": {"password_hash": hash_password(ADMIN_PASSWORD)}})
+        logger.info("Admin password updated")
+
+    # Seed testimonials
+    if await db.testimonials.count_documents({}) == 0:
+        seed_t = [
+            {"id": str(uuid.uuid4()), "name": "Ramesh Kumar", "location": "Vijayawada",
+             "rating": 5, "message": "Orbit Infra helped us find our dream villa. Their site visit and loan assistance was top class.",
+             "avatar_url": "", "approved": True, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"id": str(uuid.uuid4()), "name": "Lakshmi Devi", "location": "Guntur",
+             "rating": 5, "message": "Trustworthy partners. They handled all legal verification and made the buying process smooth.",
+             "avatar_url": "", "approved": True, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"id": str(uuid.uuid4()), "name": "Suresh Reddy", "location": "Visakhapatnam",
+             "rating": 5, "message": "Got my home loan approved in 7 days. Excellent service and transparent process.",
+             "avatar_url": "", "approved": True, "created_at": datetime.now(timezone.utc).isoformat()},
+        ]
+        await db.testimonials.insert_many(seed_t)
+
+    # Init storage (best-effort)
+    try:
+        init_storage()
+        logger.info("Storage initialized")
+    except Exception as e:
+        logger.warning(f"Storage init failed: {e}")
+
+# ---- Auth Routes ----
+@api.post("/auth/login")
+async def login(body: LoginInput, response: Response):
+    user = await db.users.find_one({"email": body.email.lower()})
+    if not user or not verify_password(body.password, user["password_hash"]):
+        raise HTTPException(401, "Invalid credentials")
+    token = create_token(user["id"], user["email"])
+    response.set_cookie("access_token", token, httponly=True, secure=False,
+                        samesite="lax", max_age=604800, path="/")
+    return {"token": token, "user": {"id": user["id"], "email": user["email"],
+                                      "name": user["name"], "role": user["role"]}}
+
+@api.post("/auth/logout")
+async def logout(response: Response):
+    response.delete_cookie("access_token", path="/")
+    return {"ok": True}
+
+@api.get("/auth/me")
+async def me(request: Request):
+    user = await get_current_admin(request)
+    return user
+
+# ---- Property Routes ----
+@api.get("/properties")
+async def list_properties(
+    location: Optional[str] = None,
+    property_type: Optional[str] = None,
+    status: Optional[str] = None,
+    project_status: Optional[str] = None,
+    bedrooms: Optional[int] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    min_area: Optional[float] = None,
+    featured: Optional[bool] = None,
+    limit: int = 50,
+):
+    q = {}
+    if location: q["location"] = {"$regex": location, "$options": "i"}
+    if property_type: q["property_type"] = property_type
+    if status: q["status"] = status
+    if project_status: q["project_status"] = project_status
+    if bedrooms is not None: q["bedrooms"] = {"$gte": bedrooms}
+    if min_price is not None or max_price is not None:
+        q["price"] = {}
+        if min_price is not None: q["price"]["$gte"] = min_price
+        if max_price is not None: q["price"]["$lte"] = max_price
+    if min_area is not None: q["area_sqft"] = {"$gte": min_area}
+    if featured is not None: q["featured"] = featured
+    items = await db.properties.find(q, {"_id": 0}).sort("created_at", -1).to_list(limit)
+    return items
+
+@api.get("/properties/{pid}")
+async def get_property(pid: str):
+    p = await db.properties.find_one({"id": pid}, {"_id": 0})
+    if not p:
+        raise HTTPException(404, "Property not found")
+    return p
+
+@api.post("/properties")
+async def create_property(body: PropertyInput, request: Request):
+    await get_current_admin(request)
+    doc = body.model_dump()
+    doc["id"] = str(uuid.uuid4())
+    doc["created_at"] = datetime.now(timezone.utc).isoformat()
+    doc["updated_at"] = doc["created_at"]
+    await db.properties.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api.put("/properties/{pid}")
+async def update_property(pid: str, body: PropertyInput, request: Request):
+    await get_current_admin(request)
+    update = body.model_dump()
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    res = await db.properties.update_one({"id": pid}, {"$set": update})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Property not found")
+    p = await db.properties.find_one({"id": pid}, {"_id": 0})
+    return p
+
+@api.delete("/properties/{pid}")
+async def delete_property(pid: str, request: Request):
+    await get_current_admin(request)
+    res = await db.properties.delete_one({"id": pid})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Property not found")
+    return {"ok": True}
+
+# ---- Image Upload ----
+@api.post("/upload")
+async def upload_image(request: Request, file: UploadFile = File(...)):
+    await get_current_admin(request)
+    ext = (file.filename or "img").split(".")[-1].lower()
+    if ext not in ["jpg", "jpeg", "png", "webp", "gif"]:
+        raise HTTPException(400, "Invalid image format")
+    path = f"{APP_NAME}/properties/{uuid.uuid4()}.{ext}"
+    data = await file.read()
+    result = put_object(path, data, file.content_type or f"image/{ext}")
+    return {"path": result["path"], "url": f"/api/files/{result['path']}"}
+
+@api.get("/files/{path:path}")
+async def serve_file(path: str):
+    try:
+        data, ctype = get_object(path)
+        return StreamingResponse(io.BytesIO(data), media_type=ctype,
+                                 headers={"Cache-Control": "public, max-age=86400"})
+    except Exception:
+        raise HTTPException(404, "File not found")
+
+# ---- Leads / Enquiries ----
+async def create_notification(title: str, body_text: str, lead_id: str = None):
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()),
+        "title": title,
+        "body": body_text,
+        "lead_id": lead_id,
+        "read": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+@api.post("/leads")
+async def create_lead(body: LeadInput):
+    doc = body.model_dump()
+    doc["id"] = str(uuid.uuid4())
+    doc["status"] = "New"
+    doc["created_at"] = datetime.now(timezone.utc).isoformat()
+    await db.leads.insert_one(doc)
+    type_label = {
+        "enquiry": "New Enquiry",
+        "site_visit": "Site Visit Request",
+        "loan": "Home Loan Application",
+        "callback": "Callback Request",
+        "contact": "Contact Form",
+    }.get(body.lead_type, "New Lead")
+    pname = f" for {body.property_name}" if body.property_name else ""
+    await create_notification(
+        f"{type_label} from {body.name}",
+        f"Mobile: {body.mobile}{pname}. Message: {body.message or '-'}",
+        doc["id"],
+    )
+    doc.pop("_id", None)
+    return {"ok": True, "id": doc["id"]}
+
+@api.get("/leads")
+async def list_leads(request: Request, lead_type: Optional[str] = None, status: Optional[str] = None):
+    await get_current_admin(request)
+    q = {}
+    if lead_type: q["lead_type"] = lead_type
+    if status: q["status"] = status
+    items = await db.leads.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return items
+
+@api.patch("/leads/{lid}")
+async def update_lead(lid: str, body: LeadStatusUpdate, request: Request):
+    await get_current_admin(request)
+    res = await db.leads.update_one({"id": lid}, {"$set": {"status": body.status,
+                                                            "updated_at": datetime.now(timezone.utc).isoformat()}})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Lead not found")
+    return {"ok": True}
+
+@api.delete("/leads/{lid}")
+async def delete_lead(lid: str, request: Request):
+    await get_current_admin(request)
+    await db.leads.delete_one({"id": lid})
+    return {"ok": True}
+
+# ---- Notifications ----
+@api.get("/notifications")
+async def list_notifications(request: Request, only_unread: bool = False):
+    await get_current_admin(request)
+    q = {"read": False} if only_unread else {}
+    items = await db.notifications.find(q, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return items
+
+@api.post("/notifications/{nid}/read")
+async def mark_read(nid: str, request: Request):
+    await get_current_admin(request)
+    await db.notifications.update_one({"id": nid}, {"$set": {"read": True}})
+    return {"ok": True}
+
+@api.post("/notifications/read-all")
+async def mark_all_read(request: Request):
+    await get_current_admin(request)
+    await db.notifications.update_many({"read": False}, {"$set": {"read": True}})
+    return {"ok": True}
+
+# ---- Testimonials ----
+@api.get("/testimonials")
+async def list_testimonials(approved_only: bool = True):
+    q = {"approved": True} if approved_only else {}
+    items = await db.testimonials.find(q, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return items
+
+@api.post("/testimonials")
+async def create_testimonial(body: TestimonialInput, request: Request):
+    await get_current_admin(request)
+    doc = body.model_dump()
+    doc["id"] = str(uuid.uuid4())
+    doc["created_at"] = datetime.now(timezone.utc).isoformat()
+    await db.testimonials.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api.delete("/testimonials/{tid}")
+async def delete_testimonial(tid: str, request: Request):
+    await get_current_admin(request)
+    await db.testimonials.delete_one({"id": tid})
+    return {"ok": True}
+
+# ---- Stats ----
+@api.get("/admin/stats")
+async def admin_stats(request: Request):
+    await get_current_admin(request)
+    return {
+        "total_properties": await db.properties.count_documents({}),
+        "available": await db.properties.count_documents({"status": "Available"}),
+        "sold": await db.properties.count_documents({"status": "Sold"}),
+        "total_leads": await db.leads.count_documents({}),
+        "new_leads": await db.leads.count_documents({"status": "New"}),
+        "site_visits": await db.leads.count_documents({"lead_type": "site_visit"}),
+        "loan_requests": await db.leads.count_documents({"lead_type": "loan"}),
+        "enquiries": await db.leads.count_documents({"lead_type": "enquiry"}),
+        "unread_notifications": await db.notifications.count_documents({"read": False}),
+    }
+
+@api.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"app": "Orbit Infra Projects API", "status": "ok"}
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.model_dump()
-    status_obj = StatusCheck(**status_dict)
-    
-    # Convert to dict and serialize datetime to ISO string for MongoDB
-    doc = status_obj.model_dump()
-    doc['timestamp'] = doc['timestamp'].isoformat()
-    
-    _ = await db.status_checks.insert_one(doc)
-    return status_obj
-
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    # Exclude MongoDB's _id field from the query results
-    status_checks = await db.status_checks.find({}, {"_id": 0}).to_list(1000)
-    
-    # Convert ISO string timestamps back to datetime objects
-    for check in status_checks:
-        if isinstance(check['timestamp'], str):
-            check['timestamp'] = datetime.fromisoformat(check['timestamp'])
-    
-    return status_checks
-
-# Include the router in the main app
-app.include_router(api_router)
+# ---- Mount ----
+app.include_router(api)
 
 app.add_middleware(
     CORSMiddleware,
@@ -77,13 +437,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
 @app.on_event("shutdown")
-async def shutdown_db_client():
+async def shutdown():
     client.close()
