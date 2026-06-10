@@ -14,14 +14,15 @@ const formatPrice = (p) => {
 };
 
 const Compare = () => {
-  const { compare, toggleCompare, clearCompare } = useWishlist();
+  const { compare, toggleCompare, clearCompare, hydrated } = useWishlist();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!hydrated) return;
     if (compare.length === 0) { setItems([]); setLoading(false); return; }
     api.post("/properties/by-ids", { ids: compare }).then(r => setItems(r.data)).finally(() => setLoading(false));
-  }, [compare]);
+  }, [compare, hydrated]);
 
   const allAmenities = Array.from(new Set(items.flatMap(p => p.amenities || [])));
 

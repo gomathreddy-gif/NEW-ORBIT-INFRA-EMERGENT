@@ -30,13 +30,21 @@ Premium luxury real estate website "Orbit Infra Projects" (tagline: *Your Truste
 - ✅ Admin dashboard with stats + recent leads + notifications
 - ✅ EMI calculator + loan application
 - ✅ Contact + site visit + callback forms
-- ✅ Property listing with filters (location, type, beds, price)
+- ✅ Property listing with filters
 - ✅ Property detail page with gallery, amenities, nearby places, video tour
-- ✅ Public-facing pages with luxury design (Playfair Display + Plus Jakarta Sans)
+- ✅ Luxury design (Playfair + Plus Jakarta Sans, Navy + Gold)
 - ✅ EN/TE language toggle, WhatsApp floating button
-- ✅ Testimonials section (3 seeded reviews)
-- ✅ Full responsive design + light mode only
-- ✅ End-to-end tested: 23/23 backend pytest pass, 100% frontend flows
+- ✅ Testimonials section
+- ✅ End-to-end tested: 23/23 backend pytest (iter 1)
+
+### Phase 2 Additions (2026-02)
+- ✅ Blog: admin CRUD + public listing/detail pages with cover images, tags, slugs
+- ✅ Agent Profiles: admin CRUD + public `/agents` page with avatar, contact links, WhatsApp
+- ✅ Wishlist: localStorage-based, header badge, dedicated `/wishlist` page
+- ✅ Property Comparison: localStorage-based, up to 4 properties, side-by-side table with amenity matrix
+- ✅ Newsletter: public subscribe (footer + homepage CTA), admin viewer with CSV export
+- ✅ Hydration race fix in WishlistContext (Compare/Wishlist pages reliable on direct nav)
+- ✅ End-to-end tested: 47/47 backend pytest pass, frontend ~95-100% (after race fix)
 
 ## Prioritized Backlog
 ### P1 (Phase 2)

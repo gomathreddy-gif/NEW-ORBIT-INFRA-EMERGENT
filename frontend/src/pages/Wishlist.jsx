@@ -6,14 +6,15 @@ import PropertyCard from "@/components/PropertyCard";
 import { useWishlist } from "@/contexts/WishlistContext";
 
 const Wishlist = () => {
-  const { wishlist } = useWishlist();
+  const { wishlist, hydrated } = useWishlist();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!hydrated) return;
     if (wishlist.length === 0) { setItems([]); setLoading(false); return; }
     api.post("/properties/by-ids", { ids: wishlist }).then(r => setItems(r.data)).finally(() => setLoading(false));
-  }, [wishlist]);
+  }, [wishlist, hydrated]);
 
   return (
     <div className="bg-white">

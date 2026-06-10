@@ -8,16 +8,25 @@ const MAX_COMPARE = 4;
 export const WishlistProvider = ({ children }) => {
   const [wishlist, setWishlist] = useState([]);
   const [compare, setCompare] = useState([]);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     try {
       setWishlist(JSON.parse(localStorage.getItem(WL_KEY) || "[]"));
       setCompare(JSON.parse(localStorage.getItem(CMP_KEY) || "[]"));
-    } catch {}
+    } catch { /* ignore */ }
+    setHydrated(true);
   }, []);
 
-  useEffect(() => { localStorage.setItem(WL_KEY, JSON.stringify(wishlist)); }, [wishlist]);
-  useEffect(() => { localStorage.setItem(CMP_KEY, JSON.stringify(compare)); }, [compare]);
+  useEffect(() => {
+    if (!hydrated) return;
+    localStorage.setItem(WL_KEY, JSON.stringify(wishlist));
+  }, [wishlist, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    localStorage.setItem(CMP_KEY, JSON.stringify(compare));
+  }, [compare, hydrated]);
 
   const toggleWishlist = (id) =>
     setWishlist((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
@@ -36,7 +45,7 @@ export const WishlistProvider = ({ children }) => {
   const clearCompare = () => setCompare([]);
 
   return (
-    <Ctx.Provider value={{ wishlist, compare, toggleWishlist, inWishlist, toggleCompare, inCompare, clearCompare, MAX_COMPARE }}>
+    <Ctx.Provider value={{ wishlist, compare, hydrated, toggleWishlist, inWishlist, toggleCompare, inCompare, clearCompare, MAX_COMPARE }}>
       {children}
     </Ctx.Provider>
   );
