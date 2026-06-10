@@ -681,6 +681,74 @@ async def track_property_view(pid: str):
     return {"ok": True}
 
 # ---- Admin Analytics ----
+@api.get("/admin/recommendations")
+async def admin_recommendations(request: Request):
+    await get_current_admin(request)
+    from datetime import timedelta
+
+    # Build lead_count per property
+    pipeline = [
+        {"$match": {"property_id": {"$ne": None}}},
+        {"$group": {"_id": "$property_id", "lead_count": {"$sum": 1}}},
+    ]
+    lead_map = {g["_id"]: g["lead_count"] for g in await db.leads.aggregate(pipeline).to_list(1000)}
+
+    UNDERPERF_VIEW_THRESHOLD = 5
+    HOT_LEAD_THRESHOLD = 2
+    HOT_CONVERSION_RATIO = 0.2
+    STALE_DAYS = 7
+
+    now = datetime.now(timezone.utc)
+    underperforming, hot, stale = [], [], []
+
+    cursor = db.properties.find(
+        {},
+        {"_id": 0, "id": 1, "name": 1, "location": 1, "price": 1, "status": 1, "images": 1,
+         "view_count": 1, "created_at": 1, "property_type": 1}
+    )
+    async for p in cursor:
+        if p.get("status") == "Sold":
+            continue
+        views = p.get("view_count", 0) or 0
+        leads = lead_map.get(p["id"], 0)
+        p["view_count"] = views
+        p["lead_count"] = leads
+
+        if views >= UNDERPERF_VIEW_THRESHOLD and leads == 0:
+            p["reason"] = f"{views} views, 0 enquiries"
+            p["suggestion"] = "Try better photos, revise the price, or add more details"
+            underperforming.append(p)
+        elif leads >= HOT_LEAD_THRESHOLD and views > 0 and (leads / max(views, 1)) >= HOT_CONVERSION_RATIO:
+            p["reason"] = f"{leads} enquiries from {views} views"
+            p["suggestion"] = "High intent — follow up immediately and consider promoting"
+            hot.append(p)
+        else:
+            try:
+                created = datetime.fromisoformat(p["created_at"].replace("Z", "+00:00"))
+            except Exception:
+                created = now
+            age_days = (now - created).days
+            if views == 0 and age_days >= STALE_DAYS and p.get("status") in ("Available", "Ready To Move", "Upcoming"):
+                p["reason"] = f"No views in {age_days} days"
+                p["suggestion"] = "Feature on homepage, share on WhatsApp/social"
+                stale.append(p)
+
+    underperforming.sort(key=lambda x: -x["view_count"])
+    hot.sort(key=lambda x: -x["lead_count"])
+    stale.sort(key=lambda x: -((now - datetime.fromisoformat(x["created_at"].replace("Z", "+00:00"))).days if x.get("created_at") else 0))
+
+    return {
+        "underperforming": underperforming[:5],
+        "hot": hot[:5],
+        "stale": stale[:5],
+        "thresholds": {
+            "underperforming_views": UNDERPERF_VIEW_THRESHOLD,
+            "hot_lead_count": HOT_LEAD_THRESHOLD,
+            "hot_conversion_ratio": HOT_CONVERSION_RATIO,
+            "stale_days": STALE_DAYS,
+        },
+    }
+
 @api.get("/admin/analytics")
 async def admin_analytics(request: Request):
     await get_current_admin(request)
