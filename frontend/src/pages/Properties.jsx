@@ -6,6 +6,14 @@ import api from "@/lib/api";
 import PropertyCard from "@/components/PropertyCard";
 import PropertyMap from "@/components/PropertyMap";
 import { useAuth } from "@/contexts/AuthContext";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 const Properties = () => {
   const [searchParams] = useSearchParams();
@@ -14,6 +22,9 @@ const Properties = () => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState("grid"); // grid | map
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [searchName, setSearchName] = useState("");
+  const [saving, setSaving] = useState(false);
   const [filters, setFilters] = useState({
     location: searchParams.get("location") || "",
     property_type: searchParams.get("property_type") || "",
@@ -45,20 +56,33 @@ const Properties = () => {
     fetchData(empty);
   };
 
-  const saveSearch = async () => {
+  const saveSearch = () => {
     if (!user) {
       toast.info("Sign in to save searches");
       navigate("/login", { state: { from: "/properties" } });
       return;
     }
-    const name = window.prompt("Name this search:", filters.location ? `${filters.location} properties` : "My search");
-    if (!name) return;
+    const suggested = filters.location ? `${filters.location} properties` : "My search";
+    setSearchName(suggested);
+    setSaveOpen(true);
+  };
+
+  const confirmSaveSearch = async () => {
+    const name = searchName.trim();
+    if (!name) {
+      toast.error("Please enter a name");
+      return;
+    }
+    setSaving(true);
     try {
       await api.post("/saved-searches", { name, filters });
       toast.success("Search saved! Access from My Account.");
+      setSaveOpen(false);
+      setSearchName("");
     } catch {
       toast.error("Could not save search");
     }
+    setSaving(false);
   };
 
   return (
@@ -139,6 +163,52 @@ const Properties = () => {
           )}
         </div>
       </section>
+
+      <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
+        <DialogContent data-testid="save-search-dialog" className="sm:max-w-md bg-white">
+          <DialogHeader>
+            <div className="eyebrow mb-2">Save Search</div>
+            <DialogTitle className="font-serif text-2xl text-navy">Name your search</DialogTitle>
+            <DialogDescription className="text-ink-muted">
+              Quickly re-run this filter combination later from your account.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <input
+              autoFocus
+              type="text"
+              value={searchName}
+              onChange={(e) => setSearchName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") confirmSaveSearch(); }}
+              placeholder="e.g. 3BHK Vijayawada under 1 Cr"
+              data-testid="save-search-name-input"
+              className="w-full border border-line bg-surface px-4 py-3 text-sm focus:border-navy focus:outline-none"
+            />
+            <div className="text-xs text-ink-muted mt-3">
+              Filters: {Object.entries(filters).filter(([, v]) => v).map(([k, v]) => `${k.replace("_", " ")}: ${v}`).join(" • ") || "All properties"}
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <button
+              type="button"
+              onClick={() => setSaveOpen(false)}
+              data-testid="save-search-cancel-btn"
+              className="border border-line text-ink-muted px-5 py-2.5 text-sm hover:border-navy hover:text-navy transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmSaveSearch}
+              disabled={saving || !searchName.trim()}
+              data-testid="save-search-confirm-btn"
+              className="bg-navy text-white px-5 py-2.5 text-sm hover:bg-navy-hover disabled:opacity-50"
+            >
+              {saving ? "Saving..." : "Save Search"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
