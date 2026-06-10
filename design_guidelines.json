@@ -1,0 +1,117 @@
+{
+  "theme": "Light Theme",
+  "archetype": "Archetype 5: Luxury / Old Money Tech (Adapted for Light Theme)",
+  "brand_identity": {
+    "name": "Orbit Infra Projects",
+    "tagline": "Your Trusted Real Estate Partner",
+    "vibe": "Corporate, Premium, Modern, Elegant, High Trust, Conversion Focused"
+  },
+  "colors": {
+    "primary": "#0A2240",
+    "primary_hover": "#0E2F58",
+    "accent_gold": "#D4AF37",
+    "accent_gold_hover": "#B3922A",
+    "background_main": "#FFFFFF",
+    "background_surface": "#F8F9FA",
+    "background_surface_alt": "#F1F3F5",
+    "text_primary": "#0A2240",
+    "text_secondary": "#4A5A70",
+    "border_light": "#E9ECEF",
+    "border_gold": "#D4AF37",
+    "whatsapp_green": "#25D366"
+  },
+  "typography": {
+    "font_family_headings": "'Playfair Display', serif",
+    "font_family_body": "'Plus Jakarta Sans', sans-serif",
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tight leading-tight",
+      "h2": "text-3xl sm:text-4xl tracking-tight leading-snug",
+      "h3": "text-2xl sm:text-3xl leading-snug",
+      "h4": "text-xl sm:text-2xl leading-snug",
+      "body_lg": "text-lg leading-relaxed",
+      "body": "text-base leading-relaxed",
+      "label": "text-xs tracking-[0.2em] uppercase font-bold text-[#D4AF37]"
+    }
+  },
+  "spacing_and_layout": {
+    "philosophy": "Generous Spacing, Optical Alignment, Clean Grid Patterns",
+    "containers": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
+    "section_padding": "py-20 lg:py-32",
+    "card_padding": "p-6 sm:p-8",
+    "grid_patterns": {
+      "featured_properties": "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8",
+      "bento_features": "grid grid-cols-1 md:grid-cols-4 gap-6",
+      "dashboard_admin": "grid grid-cols-1 lg:grid-cols-5 gap-6 (Sidebar col-span-1, Main col-span-4)"
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-[#0A2240] text-white hover:bg-[#0E2F58] px-8 py-4 rounded-sm transition-all duration-300 font-medium",
+      "accent": "bg-[#D4AF37] text-[#0A2240] hover:bg-[#B3922A] px-8 py-4 rounded-sm transition-all duration-300 font-semibold",
+      "outline": "border border-[#0A2240] text-[#0A2240] hover:bg-[#0A2240] hover:text-white px-8 py-4 rounded-sm transition-all duration-300"
+    },
+    "cards": {
+      "property_card": "bg-white border border-[#E9ECEF] hover:shadow-[0_8px_30px_rgb(10,34,64,0.08)] transition-all duration-300 group overflow-hidden rounded-sm",
+      "image_wrapper": "overflow-hidden relative aspect-[4/3] w-full",
+      "image_hover": "group-hover:scale-105 transition-transform duration-700 ease-in-out w-full h-full object-cover",
+      "tags": "absolute top-4 left-4 bg-[#D4AF37] text-white text-xs uppercase font-bold tracking-wider px-3 py-1 z-10"
+    },
+    "inputs": {
+      "standard": "border border-[#E9ECEF] focus:border-[#0A2240] focus:ring-1 focus:ring-[#0A2240] rounded-sm py-3 px-4 bg-[#F8F9FA] text-[#0A2240] w-full placeholder:text-[#4A5A70]/60"
+    },
+    "header": {
+      "style": "bg-white/90 backdrop-blur-md border-b border-[#E9ECEF] sticky top-0 z-50",
+      "nav_links": "text-[#0A2240] hover:text-[#D4AF37] font-medium transition-colors text-sm uppercase tracking-wide"
+    }
+  },
+  "animations": {
+    "scroll": "Smooth scrolling via CSS scroll-behavior or Lenis.",
+    "reveal": "Fade in and translate-y-4 using framer-motion with duration 0.6s and easeOut.",
+    "hover": "Image scaling inside overflow-hidden wrappers, subtle shadow increases, and solid color slides for buttons.",
+    "micro_interactions": "Animated stat counters when in view. Filter tabs sliding indicator."
+  },
+  "images": {
+    "hero_and_exterior": [
+      {
+        "url": "https://images.unsplash.com/photo-1760067537640-6ffab10b27d2?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MjJ8MHwxfHNlYXJjaHwyfHxsdXh1cnklMjBtb2Rlcm4lMjB2aWxsYSUyMGV4dGVyaW9yJTIwZGF5dGltZXxlbnwwfHx8fDE3ODEwNjUxMzB8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Modern luxury villa exterior with pool - Ideal for hero section background."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1760067537204-fe9b55b2f1b0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MjJ8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBtb2Rlcm4lMjB2aWxsYSUyMGV4dGVyaW9yJTIwZGF5dGltZXxlbnwwfHx8fDE3ODEwNjUxMzB8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Luxury villa with waterfall - Good for featured property listings."
+      }
+    ],
+    "interiors": [
+      {
+        "url": "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzZ8MHwxfHNlYXJjaHwzfHxtb2Rlcm4lMjBwcmVtaXVtJTIwYXBhcnRtZW50JTIwaW50ZXJpb3J8ZW58MHx8fHwxNzgxMDY1MTMwfDA&ixlib=rb-4.1.0&q=85",
+        "description": "Modern premium apartment living room - Amenities and interior gallery sections."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1738168279272-c08d6dd22002?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzZ8MHwxfHNlYXJjaHwyfHxtb2Rlcm4lMjBwcmVtaXVtJTIwYXBhcnRtZW50JTIwaW50ZXJpb3J8ZW58MHx8fHwxNzgxMDY1MTMwfDA&ixlib=rb-4.1.0&q=85",
+        "description": "Spacious premium living area - Good for single property detail view header or slider."
+      }
+    ],
+    "lifestyle": [
+      {
+        "url": "https://images.unsplash.com/photo-1778694276857-c39c6193e2ee?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTF8MHwxfHNlYXJjaHwxfHxoYXBweSUyMGZhbWlseSUyMG91dHNpZGUlMjBtb2Rlcm4lMjBob3VzZXxlbnwwfHx8fDE3ODEwNjUxMzB8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Family relaxing on modern wooden balcony - Ideal for About Us or 'Why Choose Us' trust sections."
+      }
+    ]
+  },
+  "iconography": "lucide-react",
+  "testing": "All interactive and key informational elements MUST include a data-testid attribute in kebab-case format. Example: data-testid='property-card-1', data-testid='book-visit-btn', data-testid='emi-calculator-form'.",
+  "instructions_to_main_agent": [
+    "Import 'Playfair Display' and 'Plus Jakarta Sans' from Google Fonts and set them as the primary serif and sans-serif fonts in tailwind.config.js.",
+    "Ensure all components are created as standard .js files, NOT .tsx files.",
+    "Use standard Shadcn UI components but heavily customize them to match the premium theme. Remove heavy border radius (use rounded-sm or rounded-none) to maintain the sharp luxury corporate feel.",
+    "Implement the exact color codes provided for Navy (#0A2240) and Gold (#D4AF37). Do not invent other shades unless they are slight tints/shades for hover states.",
+    "Use Playfair Display for all H1, H2, and H3 headings. Ensure tight tracking. Use Plus Jakarta Sans for body text and UI labels.",
+    "Do not use a transparent header without a backdrop-blur. Nav links must be fully legible at all times.",
+    "The Hero overlay should use a subtle gradient (e.g., bg-gradient-to-r from-black/60 to-black/20) rather than a flat solid blanket overlay so the premium architecture remains clearly visible.",
+    "For the EMI Calculator and Home Loan application section, structure it with clear input groups inside a #F8F9FA background container with a gold accent border or line.",
+    "The Admin dashboard must be high-contrast and data-dense. Use #0A2240 for the sidebar and white for the main content area. Make data tables clean with #E9ECEF borders.",
+    "For WhatsApp integration, add a fixed floating action button at the bottom right with the standard WhatsApp green color (#25D366), linking to phone number 9441085800.",
+    "Prepare the codebase structure to support multi-language (English + Telugu) by creating string dictionaries or i18n placeholders for key sections.",
+    "For Customer Reviews, utilize lucide-react star icons filled with the accent gold color (#D4AF37) to denote premium ratings."
+  ]
+}
