@@ -23,7 +23,15 @@ const PropertyDetail = () => {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    api.get(`/properties/${id}`).then(r => setP(r.data)).catch(() => setP(false));
+    api.get(`/properties/${id}`).then(r => {
+      setP(r.data);
+      // Fire-and-forget view tracking (deduped per session per property)
+      const key = `orbit_viewed_${id}`;
+      if (!sessionStorage.getItem(key)) {
+        sessionStorage.setItem(key, "1");
+        api.post(`/properties/${id}/view`).catch(() => {});
+      }
+    }).catch(() => setP(false));
   }, [id]);
 
   if (p === false) return <div className="min-h-[60vh] flex items-center justify-center text-ink-muted">Property not found.</div>;

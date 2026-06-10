@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Building2, Users, TrendingUp, AlertCircle, Bell, CalendarCheck, Banknote } from "lucide-react";
 import { Link } from "react-router-dom";
 import api from "@/lib/api";
+import AnalyticsWidget from "@/components/admin/AnalyticsWidget";
 
 const StatCard = ({ icon: Icon, label, value, color = "navy", testid }) => (
   <div className="bg-white border border-line p-6" data-testid={testid}>
@@ -59,6 +60,8 @@ const AdminDashboard = () => {
         <StatCard testid="stat-enquiries" icon={Users} label="Enquiries" value={stats.enquiries || 0} />
         <StatCard testid="stat-sold" icon={Building2} label="Sold" value={stats.sold || 0} />
       </div>
+
+      <AnalyticsWidget />
 
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-white border border-line">

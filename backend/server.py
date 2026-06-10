@@ -218,6 +218,8 @@ async def startup():
     await db.newsletter_subs.create_index("id", unique=True)
     await db.saved_searches.create_index("id", unique=True)
     await db.saved_searches.create_index("user_id")
+    await db.property_views.create_index("property_id")
+    await db.property_views.create_index("date")
 
     # Seed admin
     existing = await db.users.find_one({"email": ADMIN_EMAIL.lower()})
@@ -661,6 +663,69 @@ async def properties_by_ids(payload: dict):
         return []
     items = await db.properties.find({"id": {"$in": ids}}, {"_id": 0}).to_list(20)
     return items
+
+# ---- Property View Tracking ----
+@api.post("/properties/{pid}/view")
+async def track_property_view(pid: str):
+    p = await db.properties.find_one({"id": pid}, {"id": 1})
+    if not p:
+        raise HTTPException(404, "Property not found")
+    now = datetime.now(timezone.utc)
+    await db.properties.update_one({"id": pid}, {"$inc": {"view_count": 1}})
+    await db.property_views.insert_one({
+        "id": str(uuid.uuid4()),
+        "property_id": pid,
+        "ts": now.isoformat(),
+        "date": now.date().isoformat(),
+    })
+    return {"ok": True}
+
+# ---- Admin Analytics ----
+@api.get("/admin/analytics")
+async def admin_analytics(request: Request):
+    await get_current_admin(request)
+    from datetime import timedelta
+
+    top_viewed = await db.properties.find(
+        {"view_count": {"$exists": True, "$gt": 0}},
+        {"_id": 0, "id": 1, "name": 1, "location": 1, "price": 1, "view_count": 1, "images": 1, "status": 1}
+    ).sort("view_count", -1).limit(5).to_list(5)
+
+    pipeline = [
+        {"$match": {"property_id": {"$ne": None}}},
+        {"$group": {"_id": "$property_id", "lead_count": {"$sum": 1}}},
+        {"$sort": {"lead_count": -1}},
+        {"$limit": 5}
+    ]
+    lead_groups = await db.leads.aggregate(pipeline).to_list(5)
+    top_lead_properties = []
+    for g in lead_groups:
+        if not g.get("_id"):
+            continue
+        p = await db.properties.find_one({"id": g["_id"]}, {"_id": 0, "id": 1, "name": 1, "location": 1, "price": 1, "images": 1, "status": 1})
+        if p:
+            top_lead_properties.append({**p, "lead_count": g["lead_count"]})
+
+    today = datetime.now(timezone.utc).date()
+    daily = []
+    for i in range(6, -1, -1):
+        d = (today - timedelta(days=i)).isoformat()
+        c = await db.property_views.count_documents({"date": d})
+        daily.append({"date": d, "views": c})
+
+    type_pipeline = [
+        {"$group": {"_id": "$property_type", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}}
+    ]
+    type_breakdown = await db.properties.aggregate(type_pipeline).to_list(20)
+
+    return {
+        "top_viewed": top_viewed,
+        "top_lead_properties": top_lead_properties,
+        "daily_views": daily,
+        "total_views": await db.property_views.count_documents({}),
+        "type_breakdown": [{"type": t["_id"], "count": t["count"]} for t in type_breakdown if t.get("_id")],
+    }
 
 @api.get("/")
 async def root():

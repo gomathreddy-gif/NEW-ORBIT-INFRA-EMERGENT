@@ -54,6 +54,11 @@ Premium luxury real estate website "Orbit Infra Projects" (tagline: *Your Truste
 - ✅ AuthContext now supports admin + customer; ProtectedAdmin role-gate enforced
 - ✅ End-to-end tested: 20/20 Phase 3 backend pytest pass, ~95% frontend
 
+### Phase 4 Additions (2026-02)
+- ✅ Property Analytics: anonymous view tracking on property detail page (dedupe per session), aggregated in admin dashboard
+- ✅ Admin Dashboard widgets: Views — Last 7 Days bar chart, By Type breakdown, Most Viewed Properties (top 5), Top Lead-Generating Properties (top 5 by lead count)
+- ✅ Backend endpoints: POST /api/properties/{id}/view (public), GET /api/admin/analytics
+
 ## Prioritized Backlog
 ### P1 (Phase 2)
 - WhatsApp business API / Twilio integration for admin notifications
