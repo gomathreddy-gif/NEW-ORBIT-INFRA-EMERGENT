@@ -43,8 +43,16 @@ Premium luxury real estate website "Orbit Infra Projects" (tagline: *Your Truste
 - ✅ Wishlist: localStorage-based, header badge, dedicated `/wishlist` page
 - ✅ Property Comparison: localStorage-based, up to 4 properties, side-by-side table with amenity matrix
 - ✅ Newsletter: public subscribe (footer + homepage CTA), admin viewer with CSV export
-- ✅ Hydration race fix in WishlistContext (Compare/Wishlist pages reliable on direct nav)
-- ✅ End-to-end tested: 47/47 backend pytest pass, frontend ~95-100% (after race fix)
+- ✅ Hydration race fix in WishlistContext
+- ✅ End-to-end tested: 47/47 backend pytest pass
+
+### Phase 3 Additions (2026-02)
+- ✅ Live Maps: Leaflet + OpenStreetMap (no API key); `/properties` page Grid/Map toggle; custom navy/gold pin marker; property detail map; admin enters lat/lng per property
+- ✅ Floor Plan PDFs: admin uploads multiple PDFs per property; customers download from property detail page (Emergent storage)
+- ✅ Customer login: JWT email/password signup (`/register`) + sign-in (`/login`); customer dashboard at `/account` with avatar, saved searches, wishlist/compare quick links, logout
+- ✅ Saved Searches: customers can save any filter combo with a name from Properties page; replay or delete from `/account`
+- ✅ AuthContext now supports admin + customer; ProtectedAdmin role-gate enforced
+- ✅ End-to-end tested: 20/20 Phase 3 backend pytest pass, ~95% frontend
 
 ## Prioritized Backlog
 ### P1 (Phase 2)
