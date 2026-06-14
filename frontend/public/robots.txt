@@ -1,4 +1,0 @@
-User-agent : *   
-ALLOW :   /
-sitemap : 
-https://orbitinfraandfinace.com/sitemap.xml
