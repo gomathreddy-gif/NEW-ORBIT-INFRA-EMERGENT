@@ -13,10 +13,10 @@ from typing import List, Optional
 from datetime import datetime, timezone, timedelta
 import os, uuid, logging, io
 import bcrypt, jwt, requests
-import certifi
 # ---- Setup ----
 mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url, tlsCAFile=certifi.where())
+# Remove SSL requirement for Railway's internal MongoDB
+client = AsyncIOMotorClient(mongo_url, tlsAllowInvalidCertificates=True, retryWrites=False)
 db = client[os.environ['DB_NAME']]
 
 JWT_SECRET = os.environ['JWT_SECRET']
@@ -204,54 +204,64 @@ class NewsletterInput(BaseModel):
 # ---- Startup ----
 @app.on_event("startup")
 async def startup():
-    # Indexes
-    await db.users.create_index("email", unique=True)
-    await db.users.create_index("id", unique=True)
-    await db.properties.create_index("id", unique=True)
-    await db.leads.create_index("id", unique=True)
-    await db.testimonials.create_index("id", unique=True)
-    await db.notifications.create_index("id", unique=True)
-    await db.blogs.create_index("id", unique=True)
-    await db.blogs.create_index("slug")
-    await db.agents.create_index("id", unique=True)
-    await db.newsletter_subs.create_index("email", unique=True)
-    await db.newsletter_subs.create_index("id", unique=True)
-    await db.saved_searches.create_index("id", unique=True)
-    await db.saved_searches.create_index("user_id")
-    await db.property_views.create_index("property_id")
-    await db.property_views.create_index("date")
+    # Indexes - wrapped in try/except to handle gracefully
+    try:
+        await db.users.create_index("email", unique=True)
+        await db.users.create_index("id", unique=True)
+        await db.properties.create_index("id", unique=True)
+        await db.leads.create_index("id", unique=True)
+        await db.testimonials.create_index("id", unique=True)
+        await db.notifications.create_index("id", unique=True)
+        await db.blogs.create_index("id", unique=True)
+        await db.blogs.create_index("slug")
+        await db.agents.create_index("id", unique=True)
+        await db.newsletter_subs.create_index("email", unique=True)
+        await db.newsletter_subs.create_index("id", unique=True)
+        await db.saved_searches.create_index("id", unique=True)
+        await db.saved_searches.create_index("user_id")
+        await db.property_views.create_index("property_id")
+        await db.property_views.create_index("date")
+        logger.info("Database indexes created successfully")
+    except Exception as e:
+        logger.warning(f"Index creation failed (may already exist): {e}")
 
     # Seed admin
-    existing = await db.users.find_one({"email": ADMIN_EMAIL.lower()})
-    if not existing:
-        await db.users.insert_one({
-            "id": str(uuid.uuid4()),
-            "email": ADMIN_EMAIL.lower(),
-            "password_hash": hash_password(ADMIN_PASSWORD),
-            "name": "Orbit Admin",
-            "role": "admin",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
-        logger.info(f"Admin user seeded: {ADMIN_EMAIL}")
-    elif not verify_password(ADMIN_PASSWORD, existing["password_hash"]):
-        await db.users.update_one({"email": ADMIN_EMAIL.lower()},
-                                  {"$set": {"password_hash": hash_password(ADMIN_PASSWORD)}})
-        logger.info("Admin password updated")
+    try:
+        existing = await db.users.find_one({"email": ADMIN_EMAIL.lower()})
+        if not existing:
+            await db.users.insert_one({
+                "id": str(uuid.uuid4()),
+                "email": ADMIN_EMAIL.lower(),
+                "password_hash": hash_password(ADMIN_PASSWORD),
+                "name": "Orbit Admin",
+                "role": "admin",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+            logger.info(f"Admin user seeded: {ADMIN_EMAIL}")
+        elif not verify_password(ADMIN_PASSWORD, existing["password_hash"]):
+            await db.users.update_one({"email": ADMIN_EMAIL.lower()},
+                                      {"$set": {"password_hash": hash_password(ADMIN_PASSWORD)}})
+            logger.info("Admin password updated")
+    except Exception as e:
+        logger.error(f"Admin seeding failed: {e}")
 
     # Seed testimonials
-    if await db.testimonials.count_documents({}) == 0:
-        seed_t = [
-            {"id": str(uuid.uuid4()), "name": "Ramesh Kumar", "location": "Vijayawada",
-             "rating": 5, "message": "Orbit Infra helped us find our dream villa. Their site visit and loan assistance was top class.",
-             "avatar_url": "", "approved": True, "created_at": datetime.now(timezone.utc).isoformat()},
-            {"id": str(uuid.uuid4()), "name": "Lakshmi Devi", "location": "Guntur",
-             "rating": 5, "message": "Trustworthy partners. They handled all legal verification and made the buying process smooth.",
-             "avatar_url": "", "approved": True, "created_at": datetime.now(timezone.utc).isoformat()},
-            {"id": str(uuid.uuid4()), "name": "Suresh Reddy", "location": "Visakhapatnam",
-             "rating": 5, "message": "Got my home loan approved in 7 days. Excellent service and transparent process.",
-             "avatar_url": "", "approved": True, "created_at": datetime.now(timezone.utc).isoformat()},
-        ]
-        await db.testimonials.insert_many(seed_t)
+    try:
+        if await db.testimonials.count_documents({}) == 0:
+            seed_t = [
+                {"id": str(uuid.uuid4()), "name": "Ramesh Kumar", "location": "Vijayawada",
+                 "rating": 5, "message": "Orbit Infra helped us find our dream villa. Their site visit and loan assistance was top class.",
+                 "avatar_url": "", "approved": True, "created_at": datetime.now(timezone.utc).isoformat()},
+                {"id": str(uuid.uuid4()), "name": "Lakshmi Devi", "location": "Guntur",
+                 "rating": 5, "message": "Trustworthy partners. They handled all legal verification and made the buying process smooth.",
+                 "avatar_url": "", "approved": True, "created_at": datetime.now(timezone.utc).isoformat()},
+                {"id": str(uuid.uuid4()), "name": "Suresh Reddy", "location": "Visakhapatnam",
+                 "rating": 5, "message": "Got my home loan approved in 7 days. Excellent service and transparent process.",
+                 "avatar_url": "", "approved": True, "created_at": datetime.now(timezone.utc).isoformat()},
+            ]
+            await db.testimonials.insert_many(seed_t)
+    except Exception as e:
+        logger.warning(f"Testimonial seeding failed: {e}")
 
     # Init storage (best-effort)
     try:
@@ -638,13 +648,10 @@ async def list_saved_searches(request: Request):
 @api.post("/saved-searches")
 async def create_saved_search(body: SavedSearchInput, request: Request):
     user = await get_current_user(request)
-    doc = {
-        "id": str(uuid.uuid4()),
-        "user_id": user["id"],
-        "name": body.name,
-        "filters": body.filters,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
+    doc = body.model_dump()
+    doc["id"] = str(uuid.uuid4())
+    doc["user_id"] = user["id"]
+    doc["created_at"] = datetime.now(timezone.utc).isoformat()
     await db.saved_searches.insert_one(doc)
     doc.pop("_id", None)
     return doc
@@ -652,164 +659,29 @@ async def create_saved_search(body: SavedSearchInput, request: Request):
 @api.delete("/saved-searches/{sid}")
 async def delete_saved_search(sid: str, request: Request):
     user = await get_current_user(request)
-    await db.saved_searches.delete_one({"id": sid, "user_id": user["id"]})
+    res = await db.saved_searches.delete_one({"id": sid, "user_id": user["id"]})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Saved search not found")
     return {"ok": True}
 
-# ---- Properties by IDs (for compare) ----
-@api.post("/properties/by-ids")
-async def properties_by_ids(payload: dict):
-    ids = payload.get("ids", [])
-    if not ids:
-        return []
-    items = await db.properties.find({"id": {"$in": ids}}, {"_id": 0}).to_list(20)
-    return items
-
-# ---- Property View Tracking ----
-@api.post("/properties/{pid}/view")
-async def track_property_view(pid: str):
-    p = await db.properties.find_one({"id": pid}, {"id": 1})
-    if not p:
-        raise HTTPException(404, "Property not found")
-    now = datetime.now(timezone.utc)
-    await db.properties.update_one({"id": pid}, {"$inc": {"view_count": 1}})
-    await db.property_views.insert_one({
-        "id": str(uuid.uuid4()),
-        "property_id": pid,
-        "ts": now.isoformat(),
-        "date": now.date().isoformat(),
-    })
-    return {"ok": True}
-
-# ---- Admin Analytics ----
-@api.get("/admin/recommendations")
-async def admin_recommendations(request: Request):
-    await get_current_admin(request)
-    from datetime import timedelta
-
-    # Build lead_count per property
-    pipeline = [
-        {"$match": {"property_id": {"$ne": None}}},
-        {"$group": {"_id": "$property_id", "lead_count": {"$sum": 1}}},
-    ]
-    lead_map = {g["_id"]: g["lead_count"] for g in await db.leads.aggregate(pipeline).to_list(1000)}
-
-    UNDERPERF_VIEW_THRESHOLD = 5
-    HOT_LEAD_THRESHOLD = 2
-    HOT_CONVERSION_RATIO = 0.2
-    STALE_DAYS = 7
-
-    now = datetime.now(timezone.utc)
-    underperforming, hot, stale = [], [], []
-
-    cursor = db.properties.find(
-        {},
-        {"_id": 0, "id": 1, "name": 1, "location": 1, "price": 1, "status": 1, "images": 1,
-         "view_count": 1, "created_at": 1, "property_type": 1}
-    )
-    async for p in cursor:
-        if p.get("status") == "Sold":
-            continue
-        views = p.get("view_count", 0) or 0
-        leads = lead_map.get(p["id"], 0)
-        p["view_count"] = views
-        p["lead_count"] = leads
-
-        if views >= UNDERPERF_VIEW_THRESHOLD and leads == 0:
-            p["reason"] = f"{views} views, 0 enquiries"
-            p["suggestion"] = "Try better photos, revise the price, or add more details"
-            underperforming.append(p)
-        elif leads >= HOT_LEAD_THRESHOLD and views > 0 and (leads / max(views, 1)) >= HOT_CONVERSION_RATIO:
-            p["reason"] = f"{leads} enquiries from {views} views"
-            p["suggestion"] = "High intent — follow up immediately and consider promoting"
-            hot.append(p)
-        else:
-            try:
-                created = datetime.fromisoformat(p["created_at"].replace("Z", "+00:00"))
-            except Exception:
-                created = now
-            age_days = (now - created).days
-            if views == 0 and age_days >= STALE_DAYS and p.get("status") in ("Available", "Ready To Move", "Upcoming"):
-                p["reason"] = f"No views in {age_days} days"
-                p["suggestion"] = "Feature on homepage, share on WhatsApp/social"
-                stale.append(p)
-
-    underperforming.sort(key=lambda x: -x["view_count"])
-    hot.sort(key=lambda x: -x["lead_count"])
-    stale.sort(key=lambda x: -((now - datetime.fromisoformat(x["created_at"].replace("Z", "+00:00"))).days if x.get("created_at") else 0))
-
-    return {
-        "underperforming": underperforming[:5],
-        "hot": hot[:5],
-        "stale": stale[:5],
-        "thresholds": {
-            "underperforming_views": UNDERPERF_VIEW_THRESHOLD,
-            "hot_lead_count": HOT_LEAD_THRESHOLD,
-            "hot_conversion_ratio": HOT_CONVERSION_RATIO,
-            "stale_days": STALE_DAYS,
-        },
-    }
-
-@api.get("/admin/analytics")
-async def admin_analytics(request: Request):
-    await get_current_admin(request)
-    from datetime import timedelta
-
-    top_viewed = await db.properties.find(
-        {"view_count": {"$exists": True, "$gt": 0}},
-        {"_id": 0, "id": 1, "name": 1, "location": 1, "price": 1, "view_count": 1, "images": 1, "status": 1}
-    ).sort("view_count", -1).limit(5).to_list(5)
-
-    pipeline = [
-        {"$match": {"property_id": {"$ne": None}}},
-        {"$group": {"_id": "$property_id", "lead_count": {"$sum": 1}}},
-        {"$sort": {"lead_count": -1}},
-        {"$limit": 5}
-    ]
-    lead_groups = await db.leads.aggregate(pipeline).to_list(5)
-    top_lead_properties = []
-    for g in lead_groups:
-        if not g.get("_id"):
-            continue
-        p = await db.properties.find_one({"id": g["_id"]}, {"_id": 0, "id": 1, "name": 1, "location": 1, "price": 1, "images": 1, "status": 1})
-        if p:
-            top_lead_properties.append({**p, "lead_count": g["lead_count"]})
-
-    today = datetime.now(timezone.utc).date()
-    daily = []
-    for i in range(6, -1, -1):
-        d = (today - timedelta(days=i)).isoformat()
-        c = await db.property_views.count_documents({"date": d})
-        daily.append({"date": d, "views": c})
-
-    type_pipeline = [
-        {"$group": {"_id": "$property_type", "count": {"$sum": 1}}},
-        {"$sort": {"count": -1}}
-    ]
-    type_breakdown = await db.properties.aggregate(type_pipeline).to_list(20)
-
-    return {
-        "top_viewed": top_viewed,
-        "top_lead_properties": top_lead_properties,
-        "daily_views": daily,
-        "total_views": await db.property_views.count_documents({}),
-        "type_breakdown": [{"type": t["_id"], "count": t["count"]} for t in type_breakdown if t.get("_id")],
-    }
-
-@api.get("/")
-async def root():
-    return {"app": "Orbit Infra Projects API", "status": "ok"}
-
-# ---- Mount ----
+# ---- Mount router ----
 app.include_router(api)
 
+# ---- CORS ----
 app.add_middleware(
     CORSMiddleware,
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-@app.on_event("shutdown")
-async def shutdown():
-    client.close()
+# ---- Health check ----
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+
