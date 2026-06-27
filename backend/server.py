@@ -16,7 +16,10 @@ import bcrypt, jwt, requests
 import certifi
 # ---- Setup ----
 mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url, tlsCAFile=certifi.where())
+if 'railway.internal' in mongo_url:
+    client = AsyncIOMotorClient(mongo_url)
+else:
+    client = AsyncIOMotorClient(mongo_url, tlsCAFile=certifi.where())
 db = client[os.environ['DB_NAME']]
 
 JWT_SECRET = os.environ['JWT_SECRET']
