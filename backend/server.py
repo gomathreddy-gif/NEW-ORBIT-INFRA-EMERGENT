@@ -14,6 +14,13 @@ from datetime import datetime, timezone, timedelta
 import os, uuid, logging, io
 import bcrypt, jwt, requests
 import certifi
+import cloudinary
+import cloudinary.uploader
+cloudinary.config(
+cloud_name=os.environ.get('CLOUDINARY_CLOUD_NAME'),
+api_key=os.environ.get('CLOUDINARY_API_KEY'),
+api_secret=os.environ.get('CLOUDINARY_API_SECRET')
+)
 # ---- Setup ----
 mongo_url = os.environ['MONGO_URL']
 if 'railway.internal' in mongo_url:
