@@ -387,10 +387,14 @@ async def upload_image(request: Request, file: UploadFile = File(...)):
     ext = (file.filename or "img").split(".")[-1].lower()
     if ext not in ["jpg", "jpeg", "png", "webp", "gif"]:
         raise HTTPException(400, "Invalid image format")
-    path = f"{APP_NAME}/properties/{uuid.uuid4()}.{ext}"
     data = await file.read()
-    result = put_object(path, data, file.content_type or f"image/{ext}")
-    return {"path": result["path"], "url": f"/api/files/{result['path']}"}
+    result = cloudinary.uploader.upload(
+        data,
+        folder="orbit-infra/properties",
+        resource_type="image"
+    )
+    url = result["secure_url"]
+    return {"path": url, "url": url}
 
 @api.post("/upload-pdf")
 async def upload_pdf(request: Request, file: UploadFile = File(...)):
